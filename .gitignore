@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Dane wejściowe (pobierane osobno, zbyt duże na repozytorium)
+warianty/
+wojewodztwa-adresy/
+
+# Wyniki generowania
+raporty/
