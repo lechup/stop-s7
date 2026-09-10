@@ -43,6 +43,20 @@ Skrypt korzysta tylko z biblioteki standardowej, więc można go uruchomić
 przed instalacją zależności. Sprawdza sumy sha256, a przy niezgodności
 przerywa i kasuje pobrany plik.
 
+### Źródło danych
+
+Punkty adresowe pochodzą z **Państwowego Rejestru Granic (PRG)**, prowadzonego
+przez Główny Urząd Geodezji i Kartografii (GUGiK):
+
+<https://www.geoportal.gov.pl/pl/dane/panstwowy-rejestr-granic-prg/>
+
+Zgodnie z informacją na Geoportalu dane PRG są udostępniane bezpłatnie
+i do dowolnego wykorzystania. Wykorzystany zestaw to punkty adresowe
+dla województwa małopolskiego (kod 12).
+
+Pliki GML z wariantami przebiegu trasy pochodzą z materiałów
+z konsultacji społecznych dotyczących przebiegu S7.
+
 ### Wgranie nowej wersji danych
 
 1. Spakuj katalogi:
