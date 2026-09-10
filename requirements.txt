@@ -1,2 +1,2 @@
 geopandas==1.1.2
-
+pyogrio==0.13.0
