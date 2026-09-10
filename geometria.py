@@ -133,6 +133,20 @@ def slad_dokladny(wariant, postep=None):
   return shapely.union_all(zebrane)
 
 
+def pas_tunelu(wariant, nazwy=None):
+  """Pas wykopu nad odcinkami tunelowymi (None, gdy wariant nie ma tuneli).
+
+  Metoda dokladna zostawia nad tunelem dziure, bo nie ma tam linii skarp —
+  co jest poprawne dla tunelu drazonego, ale nie dla odkrywki, gdzie teren
+  jest rozkopany na calej szerokosci."""
+  nazwy = nazwy if nazwy is not None else nazwy_warstw(wariant)
+  tunel = wczytaj(wariant, "os_tunel", nazwy)
+  if not len(tunel):
+    return None
+  return shapely.buffer(
+      shapely.union_all(tunel.values), consts.SZEROKOSC_ODKRYWKI)
+
+
 def slad_uproszczony(wariant, nazwy=None):
   """Bufor osi drog o stalej szerokosci — dziala dla kazdego wariantu."""
   os_wariantu = osie(wariant, nazwy)

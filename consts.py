@@ -13,7 +13,7 @@ VARIANTS = ["A", "B", "C", "D", "E", "F"]
 WZORCE = {
     "os":       r"^otrasyS7_\d+(___2_)?$",
     "os_bdi":   r"^otrasyBDI_\d+(___2_)?$",
-    "os_tunel": r"^otrasyS7wtunelu_\d+(___2_)?$",
+    "os_tunel": r"^otrasy(S7|BDI)wtunelu_\d+(___2_)?$",
     "jezdnia":  r"^pobocze_\d+(___2_)?$",
     "skarpy":   r"^\d*(skarpy_)?part_[a-z]{2}(___2_)?$",
     "tunele":   r"^projektowanetunele_\d+(___2_)?$",
@@ -40,6 +40,13 @@ STREFY = [20, 30, 50, 200]
 
 # Polowa szerokosci pasa w metodzie uproszczonej [m].
 SZEROKOSC_UPROSZCZONA = 30
+
+# Polowa szerokosci wykopu nad tunelem [m]. Tunele budowane metoda odkrywkowa
+# wymagaja wykopu mniej wiecej tak szerokiego jak droga na powierzchni —
+# zmierzone slady maja 47,7-57,9 m szerokosci, stad 30 m w kazda strone.
+# Adresy w tym pasie trafiaja do osobnej kolumny "nad tunelem", a nie do
+# "w sladzie": nad tunelem drazonym budynki zostaja, nad odkrywka nie.
+SZEROKOSC_ODKRYWKI = 30
 
 # Domkniecie morfologiczne: promien dobrany kalibracja (patrz warstwy.md).
 # Ponizej 20 m linie skarp sie nie domykaja i slad rozpada sie na kawalki;

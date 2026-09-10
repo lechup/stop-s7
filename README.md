@@ -42,8 +42,29 @@ i kalibracja promienia: [warstwy.md](warstwy.md).
 Wariant **B nie ma w materiałach warstw skarp**, więc liczy się wyłącznie metodą
 uproszczoną.
 
-**Strefy** są rozłączne (`w śladzie`, `0-20 m`, `20-30 m`, `30-50 m`, `50-200 m`),
-a obok nich raport podaje kolumny narastające (`≤20 m` … `≤200 m`).
+### Tunele
+
+Odcinki tunelowe leżą w osobnej warstwie (`otrasyS7wtunelu_*`, `otrasyBDIwtunelu_*`)
+i stanowią od 12% do 26% długości trasy — poza wariantem E, który tuneli nie ma.
+
+Nad tunelem drążonym budynki zostają, ale nad tunelem budowanym metodą odkrywkową
+teren jest rozkopany na całej szerokości i budynki znikają tak samo jak na
+powierzchni. Raport nie rozstrzyga, która technologia gdzie zostanie użyta —
+podaje te adresy w **osobnej kolumnie `nad tunelem`**, żeby dało się je doliczyć
+lub odliczyć świadomie:
+
+```
+do rozbiórki  =  w śladzie  +  nad tunelem
+```
+
+Pas wykopu przyjęto jako ±30 m od osi tunelu — tyle, ile wynosi połowa
+zmierzonej szerokości śladu na powierzchni (47,7–57,9 m). Steruje tym
+`SZEROKOSC_ODKRYWKI` w [consts.py](consts.py).
+
+**Strefy** są rozłączne (`w śladzie`, `nad tunelem`, `0-20 m`, `20-30 m`,
+`30-50 m`, `50-200 m`), a obok nich raport podaje kolumny narastające
+(`≤20 m` … `≤200 m`), liczone od krawędzi korytarza — czyli śladu powierzchniowego
+razem z pasem nad tunelem.
 
 ## Wyniki
 
@@ -52,8 +73,10 @@ W katalogu `raporty/`:
 | plik | zawartość |
 |---|---|
 | `podsumowanie.csv` | wiersz na wariant × metodę, liczby w strefach |
-| `wariant-X-<metoda>-adresy.csv` | pojedyncze adresy: miejscowość, ulica, numer, odległość, strefa |
-| `wariant-X-<metoda>-slad.gpkg` | geometria śladu do obejrzenia w QGIS |
+| `rozbiorka.md` | listy adresów do rozbiórki, pogrupowane po miejscowościach |
+| `wariant-X-<metoda>-rozbiorka.csv` | te same adresy w formie tabelarycznej |
+| `wariant-X-<metoda>-adresy.csv` | wszystkie adresy do 200 m: odległość i strefa |
+| `wariant-X-<metoda>-slad.gpkg` | geometria korytarza (warstwy `powierzchnia` i `tunel`) do QGIS |
 
 ## Wiarygodność
 
