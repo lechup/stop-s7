@@ -12,6 +12,11 @@ import consts
 import geometria
 
 ADRESY = "wojewodztwa-adresy/malopolska/NOWE_PRG_PunktyAdresowe_12.shp"
+
+
+def znajdz_plik_adresow():
+  """Sciezka do pliku z punktami adresowymi."""
+  return ADRESY
 KOLUMNY = ["NUMER_PORZ", "NAZWA_ULC", "NAZWA_MSC", "NAZWA_GMI", "KOD_POCZT"]
 KATALOG_WYNIKOW = "raporty"
 
@@ -39,6 +44,24 @@ def wczytaj_adresy(obszar):
   # maja go jako EPSG:2180. To ten sam uklad, ale bez ujednolicenia geopandas
   # zglasza niezgodnosc CRS przy zlaczeniach przestrzennych.
   return gdf.to_crs(consts.CRS_METRYCZNY)
+
+
+def stan_danych():
+  """Najnowsza sensowna data nadania adresu — czyli do kiedy siegaja dane.
+
+  Pole DATA_NAD zawiera w zrodle bledne wpisy (daty w rodzaju 0203 albo 2984),
+  wiec odsiewamy wartosci poza realnym zakresem. Zwraca None, jesli pliku nie
+  da sie odczytac albo nie ma takiego pola."""
+  try:
+    dane = pyogrio.read_dataframe(
+        znajdz_plik_adresow(), columns=["DATA_NAD"], read_geometry=False)
+  except Exception:
+    return None
+  if "DATA_NAD" not in dane:
+    return None
+  daty = pd.to_datetime(dane["DATA_NAD"], errors="coerce")
+  daty = daty[(daty >= "1950-01-01") & (daty <= pd.Timestamp.today())]
+  return daty.max().date() if len(daty) else None
 
 
 def nazwy_stref():
@@ -200,9 +223,29 @@ def zapisz_liste_rozbiorek():
     pods = pd.read_csv(sciezka_pods).fillna({"szacunek": ""})
     szacunki = dict(zip(pods["wariant"], pods["szacunek"] == "tak"))
 
-  L = ["# Adresy przeznaczone do rozbiorki", ""]
-  L.append("Punkty adresowe lezace w sladzie drogi lub w pasie wykopu nad tunelem")
-  L.append("budowanym metoda odkrywkowa. Zrodlo: PRG (GUGiK), stan z danych wejsciowych.")
+  stan = stan_danych()
+  L = ["# Adresy w śladzie planowanej drogi S7", ""]
+  L.append("> **To wyliczenie, nie oficjalna lista wywłaszczeń.** Zestawienie powstało")
+  L.append("> z materiałów konsultacji społecznych przez rekonstrukcję śladu drogi")
+  L.append("> z linii krawędzi jezdni i skarp — obrys zajęcia terenu nie został")
+  L.append("> opublikowany, więc ślad jest odtworzony, a nie przepisany. To nie jest")
+  L.append("> decyzja administracyjna ani zapowiedź rozbiórki konkretnego budynku.")
+  L.append(">")
+  L.append("> Ograniczenia, o których trzeba wiedzieć:")
+  L.append(">")
+  L.append("> - punkt adresowy PRG to współrzędna, a nie obrys budynku — dom może stać")
+  L.append(">   kilka metrów od punktu, więc pojedyncze trafienia mogą być mylne,")
+  L.append("> - **wariant B jest szacunkiem** — materiały nie zawierają dla niego warstw skarp,")
+  L.append("> - kategoria „nad tunelem” zakłada budowę metodą odkrywkową, czego materiały")
+  L.append(">   nie rozstrzygają; nad tunelem drążonym budynki zostają,")
+  L.append("> - dane adresowe: PRG (GUGiK){}.".format(
+      ", stan na {}".format(stan.strftime("%d.%m.%Y")) if stan else ""))
+  L.append(">")
+  L.append("> Metoda, kalibracja i kontrole: README.md i warstwy.md w repozytorium")
+  L.append("> <https://github.com/lechup/stop-s7>")
+  L.append("")
+  L.append("Poniżej punkty adresowe leżące w śladzie drogi lub w pasie wykopu nad")
+  L.append("tunelem, pogrupowane po miejscowościach.")
   L.append("")
   for wariant in consts.VARIANTS:
     plik = "{}/wariant-{}-rozbiorka.csv".format(KATALOG_WYNIKOW, wariant)
@@ -213,15 +256,15 @@ def zapisz_liste_rozbiorek():
     L.append("## Wariant {}{}".format(wariant, " — SZACUNEK" if szacowany else ""))
     L.append("")
     if szacowany:
-      L.append("> Materialy nie zawieraja dla tego wariantu warstw skarp. Slad")
-      L.append("> policzono z samego pobocza, poszerzonego o sredni margines")
-      L.append("> {:.1f} m na strone, zmierzony na pozostalych wariantach.".format(
+      L.append("> Materiały nie zawierają dla tego wariantu warstw skarp. Ślad")
+      L.append("> policzono z samego pobocza, poszerzonego o średni margines")
+      L.append("> {:.1f} m na stronę, zmierzony na pozostałych wariantach.".format(
           consts.MARGINES_SKARP))
       L.append("")
     if adresy.empty:
-      L.append("_Brak adresow._\n")
+      L.append("_Brak adresów._\n")
       continue
-    L.append("Razem: **{}** adresow ({} w sladzie, {} nad tunelem).".format(
+    L.append("Razem: **{}** adresów ({} w śladzie, {} nad tunelem).".format(
         len(adresy),
         int((adresy["strefa"] == W_SLADZIE).sum()),
         int((adresy["strefa"] == NAD_TUNELEM).sum())))

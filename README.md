@@ -176,7 +176,8 @@ z konsultacji społecznych dotyczących przebiegu S7.
    tar -czf dane-archiwa/warianty.tar.gz warianty
    tar -czf dane-archiwa/wojewodztwa-adresy.tar.gz wojewodztwa-adresy
    ```
-2. Utwórz release z nowym tagiem (np. `dane-v2`) i dołącz oba archiwa jako assety.
+2. Utwórz release z tagiem nazwanym rocznikiem danych (`v2026.09` dla danych
+   z września 2026) i dołącz archiwa oraz raporty jako assety.
 3. Podbij `DATA_TAG` w [dane.py](dane.py) i zaktualizuj sumy kontrolne:
    ```bash
    python3 pobierz_dane.py --sumy
@@ -184,6 +185,12 @@ z konsultacji społecznych dotyczących przebiegu S7.
 
 Repozytorium musi być publiczne — dla prywatnego pobieranie assetów
 wymagałoby tokena.
+
+Tagi wersjonowane są **rocznikiem danych** (`rok.miesiąc`), a nie numerem
+kolejnym — wiek danych adresowych jest ich najważniejszą właściwością, bo PRG
+aktualizowany jest na bieżąco w dni robocze. Jeden release zawiera komplet
+z danego rocznika: archiwa wejściowe i wyliczone z nich raporty, żeby nie dało
+się pomylić, które wyniki pochodzą z których danych.
 
 ## Pliki
 

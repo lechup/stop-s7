@@ -7,8 +7,10 @@ podbij DATA_TAG i zaktualizuj sumy kontrolne (pobierz_dane.py --sumy).
 
 REPO = "lechup/stop-s7"
 
-# Tag release'a, z którego pobierane są dane.
-DATA_TAG = "dane-v1"
+# Tag release'a, z którego pobierane są dane. Wersjonowanie rocznikiem
+# danych (rok.miesiąc), bo wiek danych adresowych jest ich najważniejszą
+# właściwością — PRG aktualizowany jest na bieżąco w dni robocze.
+DATA_TAG = "v2025.12"
 
 # nazwa archiwum -> (katalog, który ma powstać po rozpakowaniu, suma sha256)
 ARCHIVES = {
