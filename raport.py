@@ -21,6 +21,12 @@ parser.add_argument(
     help="Ogranicz do wybranych wariantow (mozna podac wielokrotnie); domyslnie wszystkie"
 )
 parser.add_argument(
+    "--adres",
+    metavar="ZAPYTANIE",
+    help="Sprawdz pojedynczy adres we wszystkich wariantach, np. --adres \"Osterwy 41P\" "
+         "albo --adres \"Golkowice 116\". Korzysta z zapisanych sladow"
+)
+parser.add_argument(
     "--bez-sladu",
     action="store_true",
     help="Nie zapisuj plikow GPKG ze sladem drogi"
@@ -29,7 +35,9 @@ parser.add_argument(
 if __name__ == "__main__":
     args = parser.parse_args()
 
-    if args.mode == consts.DEBUG_CHOICE:
+    if args.adres:
+        functions.sprawdz_adres(args.adres)
+    elif args.mode == consts.DEBUG_CHOICE:
         functions.debug()
     elif args.mode == "margines":
         geometria.zmierz_margines(args.wariant)

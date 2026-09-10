@@ -15,6 +15,9 @@ ADRESY = "wojewodztwa-adresy/malopolska/NOWE_PRG_PunktyAdresowe_12.shp"
 KOLUMNY = ["NUMER_PORZ", "NAZWA_ULC", "NAZWA_MSC", "NAZWA_GMI", "KOD_POCZT"]
 KATALOG_WYNIKOW = "raporty"
 
+# Powyzej tylu trafien --adres skraca wydruk do jednej linii na adres.
+SZCZEGOLOWO_DO = 5
+
 W_SLADZIE = "w śladzie"
 NAD_TUNELEM = "nad tunelem"
 DO_ROZBIORKI = "do rozbiórki"
@@ -317,3 +320,117 @@ def debug():
           ",".join(role) or "-"))
     braki = [r for r in ("os", "jezdnia", "skarpy") if not consts.dopasuj(nazwy, r)]
     print("  BRAKI: {}\n".format(", ".join(braki) if braki else "brak"))
+
+def _rozbierz_zapytanie(zapytanie):
+  """Dzieli "Osterwy 41P" na (nazwa, numer).
+
+  Numerem jest ostatni czlon, jesli zaczyna sie od cyfry — adresy wiejskie
+  bywaja bez ulicy ("Golkowice 116"), a numery miewaja litery ("41P", "37b")."""
+  czesci = zapytanie.strip().split()
+  if len(czesci) >= 2 and czesci[-1][:1].isdigit():
+    return " ".join(czesci[:-1]), czesci[-1]
+  return zapytanie.strip(), None
+
+
+def znajdz_adres(zapytanie):
+  """Wyszukuje punkty adresowe w danych PRG. Zwraca GeoDataFrame."""
+  nazwa, numer = _rozbierz_zapytanie(zapytanie)
+  bezpieczna = nazwa.replace("'", "''")
+
+  if numer:
+    warunek = "NUMER_PORZ = '{}'".format(numer.replace("'", "''"))
+  else:
+    warunek = ("NAZWA_ULC LIKE '%{0}%' OR NAZWA_MSC LIKE '%{0}%'".format(bezpieczna))
+
+  gdf = gpd.read_file(ADRESY, columns=KOLUMNY, where=warunek)
+  if gdf.empty:
+    return gdf
+  if nazwa:
+    wzorzec = nazwa.lower()
+    pasuje = (gdf["NAZWA_ULC"].fillna("").str.lower().str.contains(wzorzec, regex=False)
+              | gdf["NAZWA_MSC"].fillna("").str.lower().str.contains(wzorzec, regex=False))
+    gdf = gdf[pasuje]
+  return gdf.to_crs(consts.CRS_METRYCZNY)
+
+
+def sprawdz_adres(zapytanie, postep=print):
+  """Dla podanego adresu podaje odleglosc i strefe w kazdym wariancie."""
+  znalezione = znajdz_adres(zapytanie)
+  if znalezione.empty:
+    postep("Nie znaleziono adresu pasujacego do '{}'.".format(zapytanie))
+    return None
+
+  brakujace = [w for w in consts.VARIANTS
+               if not os.path.exists("{}/wariant-{}-slad.gpkg".format(KATALOG_WYNIKOW, w))]
+  if brakujace:
+    postep("Brak zapisanych sladow dla wariantow: {}.".format(", ".join(brakujace)))
+    postep("Policz je najpierw: ./uruchom.sh")
+    return None
+
+  korytarze = {}
+  for wariant in consts.VARIANTS:
+    warstwy = gpd.read_file("{}/wariant-{}-slad.gpkg".format(KATALOG_WYNIKOW, wariant))
+    powierzchnia = warstwy[warstwy["rodzaj"] == "powierzchnia"]
+    korytarze[wariant] = (
+        shapely.union_all(warstwy.geometry.values),
+        shapely.union_all(powierzchnia.geometry.values) if not powierzchnia.empty else None,
+    )
+
+  szacunki = {}
+  sciezka = "{}/podsumowanie.csv".format(KATALOG_WYNIKOW)
+  if os.path.exists(sciezka):
+    pods = pd.read_csv(sciezka).fillna({"szacunek": ""})
+    szacunki = dict(zip(pods["wariant"], pods["szacunek"] == "tak"))
+
+  # Przy wielu trafieniach pelna tabelka na kazdy adres to sciana tekstu —
+  # wtedy jedna linia na adres z najblizszym wariantem.
+  zwiezle = len(znalezione) > SZCZEGOLOWO_DO
+  if len(znalezione) > 1:
+    postep("Pasuje {} adresow{}.\n".format(
+        len(znalezione), " — skrocone do najblizszego wariantu" if zwiezle else ""))
+  if zwiezle:
+    postep("  {:<44} {:>10} {:>9}   {}".format(
+        "adres", "najblizszy", "odleglosc", "strefa"))
+
+  wyniki = []
+  for _, adres in znalezione.iterrows():
+    opis = "{} {}, {} {}".format(
+        _tekst(adres["NAZWA_ULC"]), _tekst(adres["NUMER_PORZ"]),
+        _tekst(adres["KOD_POCZT"]), _tekst(adres["NAZWA_MSC"]))
+    if not zwiezle:
+      postep(opis)
+      postep("  {:<9} {:>14} {:>16}   {}".format(
+          "wariant", "od korytarza", "od powierzchni", "strefa"))
+    punkt = adres.geometry
+    wiersze_adresu = []
+    for wariant in consts.VARIANTS:
+      korytarz, powierzchnia = korytarze[wariant]
+      od_korytarza = shapely.distance(punkt, korytarz)
+      od_powierzchni = (shapely.distance(punkt, powierzchnia)
+                        if powierzchnia is not None else None)
+      if od_korytarza > max(consts.STREFY):
+        strefa = "poza {} m".format(max(consts.STREFY))
+      elif od_powierzchni == 0:
+        strefa = W_SLADZIE.upper()
+      elif od_korytarza == 0:
+        strefa = NAD_TUNELEM.upper()
+      else:
+        strefa = _strefa(od_korytarza)
+      if not zwiezle:
+        postep("  {:<9} {:>13.1f}m {:>15.1f}m   {}{}".format(
+            wariant, od_korytarza,
+            od_powierzchni if od_powierzchni is not None else float("nan"),
+            strefa, "  [SZACUNEK]" if szacunki.get(wariant) else ""))
+      wiersz = {"adres": opis, "wariant": wariant,
+                "odleglosc_m": round(od_korytarza, 1), "strefa": strefa}
+      wiersze_adresu.append(wiersz)
+      wyniki.append(wiersz)
+
+    if zwiezle:
+      najblizszy = min(wiersze_adresu, key=lambda w: w["odleglosc_m"])
+      postep("  {:<44} {:>10} {:>8.1f}m   {}".format(
+          opis[:44], najblizszy["wariant"], najblizszy["odleglosc_m"],
+          najblizszy["strefa"]))
+    else:
+      postep("")
+  return pd.DataFrame(wyniki)

@@ -18,6 +18,7 @@ Przykłady:
 ./uruchom.sh --bez-sladu               # bez zapisu GPKG
 ./uruchom.sh --mode debug              # wykaz warstw w plikach GML
 ./uruchom.sh --mode margines           # przelicz średni margines skarp
+./uruchom.sh --adres "Osterwy 41P"     # sprawdź pojedynczy adres
 LIMIT=8G ./uruchom.sh                  # podnieś limit pamięci
 ```
 
@@ -92,6 +93,30 @@ W katalogu `raporty/`:
 | `wariant-X-rozbiorka.csv` | te same adresy w formie tabelarycznej |
 | `wariant-X-adresy.csv` | wszystkie adresy do 200 m: odległość i strefa |
 | `wariant-X-slad.gpkg` | geometria korytarza (warstwy `powierzchnia` i `tunel`) do QGIS |
+
+## Sprawdzanie pojedynczego adresu
+
+```bash
+./uruchom.sh --adres "Osterwy 41P"     # ulica i numer
+./uruchom.sh --adres "Golkowice 116"   # adres wiejski, bez ulicy
+./uruchom.sh --adres "Osterwy"         # sama ulica — skrót do najbliższego wariantu
+```
+
+Dla podanego adresu wypisuje odległość i strefę w każdym z wariantów:
+
+```
+Juliusza Osterwy 41P, 30-699 Kraków
+  wariant     od korytarza   od powierzchni   strefa
+  A                3215.9m          3215.9m   poza 200 m
+  B                 100.9m           152.0m   50-200 m  [SZACUNEK]
+  C                 691.4m           691.4m   poza 200 m
+```
+
+Kolumna `od powierzchni` liczona jest z pominięciem pasa nad tunelem, więc różnica
+między nią a `od korytarza` pokazuje, że najbliżej przebiega odcinek tunelowy.
+
+Tryb korzysta z zapisanych plików `wariant-X-slad.gpkg`, więc odpowiada od razu —
+ale wymaga wcześniejszego przeliczenia (`./uruchom.sh`).
 
 ## Wiarygodność
 
