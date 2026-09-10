@@ -77,18 +77,19 @@ def _kafelki(granice):
     x += bok
 
 
-def slad_dokladny(wariant, postep=None):
-  """Obszar miedzy zewnetrznymi liniami skarp — realne zajecie terenu.
+def slad_dokladny(wariant, postep=None, role=("jezdnia", "skarpy")):
+  """Obszar zamkniety podanymi liniami — domyslnie jezdnia razem ze skarpami,
+  czyli realne zajecie terenu.
 
-  Wymaga warstw skarp; wariant B ich nie ma (zwraca None)."""
+  role=("jezdnia",) daje sam pas jezdni, bez nasypow i wykopow — potrzebne dla
+  wariantu B, ktory nie ma w materialach warstw skarp."""
   nazwy = nazwy_warstw(wariant)
-  if not ma_skarpy(wariant, nazwy):
+  dostepne = [r for r in role if consts.dopasuj(nazwy, r)]
+  if not dostepne:
     return None
 
   linie = pd.concat(
-      [wczytaj(wariant, "jezdnia", nazwy), wczytaj(wariant, "skarpy", nazwy)],
-      ignore_index=True,
-  )
+      [wczytaj(wariant, r, nazwy) for r in dostepne], ignore_index=True)
   linie = gpd.GeoSeries(linie, crs=consts.CRS_METRYCZNY)
   linie = linie[~linie.is_empty & linie.notna()]
   # Upraszczanie przed buforowaniem tnie liczbe wierzcholkow kilkukrotnie.
@@ -147,16 +148,49 @@ def pas_tunelu(wariant, nazwy=None):
       shapely.union_all(tunel.values), consts.SZEROKOSC_ODKRYWKI)
 
 
-def slad_uproszczony(wariant, nazwy=None):
-  """Bufor osi drog o stalej szerokosci — dziala dla kazdego wariantu."""
-  os_wariantu = osie(wariant, nazwy)
-  if not len(os_wariantu):
+def slad_drogi(wariant, postep=None):
+  """Slad drogi wariantu wraz z informacja, czy jest szacowany.
+
+  Zwraca (geometria, szacowany). Dla wariantow z warstwami skarp slad wynika
+  wprost z projektu. Wariant B skarp nie ma — jego slad powstaje z samego
+  pobocza poszerzonego o sredni margines zmierzony na pozostalych wariantach,
+  wiec jest szacunkiem i jest tak oznaczany w raporcie."""
+  nazwy = nazwy_warstw(wariant)
+  if ma_skarpy(wariant, nazwy):
+    return slad_dokladny(wariant, postep), False
+
+  if postep:
+    postep("  brak warstw skarp — slad z pobocza + {:.1f} m marginesu (SZACUNEK)"
+           .format(consts.MARGINES_SKARP))
+  pas = slad_dokladny(wariant, postep, role=("jezdnia",))
+  if pas is None:
+    return None, False
+  return shapely.buffer(pas, consts.MARGINES_SKARP), True
+
+
+def zmierz_margines(warianty=None, postep=print):
+  """Przelicza sredni margines skarp na podstawie wariantow, ktore je maja.
+
+  Dla kazdego wariantu porownuje slad z samego pobocza ze sladem pelnym
+  i zwraca srednia roznice szerokosci na jedna strone."""
+  warianty = warianty or consts.VARIANTS
+  pomiary = []
+  for wariant in warianty:
+    nazwy = nazwy_warstw(wariant)
+    if not ma_skarpy(wariant, nazwy):
+      continue
+    dlugosc = shapely.length(shapely.union_all(osie(wariant, nazwy).values))
+    pas = slad_dokladny(wariant, role=("jezdnia",))
+    pelny = slad_dokladny(wariant)
+    if pas is None or pelny is None:
+      continue
+    na_strone = (shapely.area(pelny) - shapely.area(pas)) / dlugosc / 2
+    pomiary.append((wariant, na_strone))
+    postep("  {}: +{:.1f} m na strone".format(wariant, na_strone))
+
+  if not pomiary:
     return None
-  return shapely.buffer(
-      shapely.union_all(os_wariantu.values), consts.SZEROKOSC_UPROSZCZONA)
-
-
-def slad(wariant, metoda, postep=None):
-  if metoda == consts.DOKLADNA:
-    return slad_dokladny(wariant, postep)
-  return slad_uproszczony(wariant)
+  srednia = sum(m for _, m in pomiary) / len(pomiary)
+  postep("\nSrednia: +{:.1f} m na strone (obecnie w consts.MARGINES_SKARP: {})"
+         .format(srednia, consts.MARGINES_SKARP))
+  return srednia

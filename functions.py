@@ -57,7 +57,7 @@ def _strefa(odleglosc):
   return None
 
 
-def policz(wariant, metoda, postep=None):
+def policz(wariant, postep=None):
   """Liczy rozklad adresow wzgledem korytarza drogi.
 
   Korytarz dzieli sie na dwie czesci liczone osobno:
@@ -67,11 +67,11 @@ def policz(wariant, metoda, postep=None):
   skarp), a uproszczona buforuje os takze pod tunelem — rozdzielenie sprowadza
   obie metody do tej samej definicji.
 
-  Zwraca (GeoDataFrame adresow w zasiegu, warstwy korytarza) albo (None, None)."""
+  Zwraca (GeoDataFrame adresow, warstwy korytarza, czy slad jest szacowany)."""
   nazwy = geometria.nazwy_warstw(wariant)
-  slad_pelny = geometria.slad(wariant, metoda, postep)
+  slad_pelny, szacowany = geometria.slad_drogi(wariant, postep)
   if slad_pelny is None:
-    return None, None
+    return None, None, False
 
   pas = geometria.pas_tunelu(wariant, nazwy)
   if pas is None:
@@ -84,7 +84,7 @@ def policz(wariant, metoda, postep=None):
 
   adresy = wczytaj_adresy(korytarz)
   if adresy.empty:
-    return adresy.assign(odleglosc_m=[], strefa=[]), warstwy
+    return adresy.assign(odleglosc_m=[], strefa=[]), warstwy, szacowany
 
   # Odleglosc liczymy do poszczegolnych czesci korytarza, nie do calosci —
   # drzewo STR odsiewa wtedy dalekie czesci zamiast porownywac kazdy punkt
@@ -96,7 +96,7 @@ def policz(wariant, metoda, postep=None):
       adresy, czesci, max_distance=float(max(consts.STREFY)),
       distance_col="odleglosc_m", how="inner")
   if pary.empty:
-    return adresy.iloc[0:0].assign(odleglosc_m=[], strefa=[]), warstwy
+    return adresy.iloc[0:0].assign(odleglosc_m=[], strefa=[]), warstwy, szacowany
 
   # sjoin_nearest zwraca po wierszu na kazda remisujaca czesc korytarza.
   pary = pary.sort_values("odleglosc_m").groupby(level=0).first()
@@ -120,12 +120,12 @@ def policz(wariant, metoda, postep=None):
       # Punkt tuz przy krawedzi moze miec odleglosc 0 i nie byc "wewnatrz".
       strefy.append(_strefa(odl) or nazwy_stref()[2])
   wynik["strefa"] = strefy
-  return wynik, warstwy
+  return wynik, warstwy, szacowany
 
 
-def podsumuj(wariant, metoda, adresy):
+def podsumuj(wariant, adresy, szacowany=False):
   """Wiersz podsumowania: strefy rozlaczne + kolumny narastajace."""
-  wiersz = {"wariant": wariant, "metoda": metoda}
+  wiersz = {"wariant": wariant}
   liczby = adresy["strefa"].value_counts() if len(adresy) else {}
   for nazwa in nazwy_stref():
     wiersz[nazwa] = int(liczby.get(nazwa, 0)) if len(adresy) else 0
@@ -138,6 +138,7 @@ def podsumuj(wariant, metoda, adresy):
     narastajaco += wiersz["{}-{} m".format(poprzedni, prog)]
     wiersz["≤{} m".format(prog)] = narastajaco
     poprzedni = prog
+  wiersz["szacunek"] = "tak" if szacowany else ""
   return wiersz
 
 
@@ -184,15 +185,36 @@ def _klucz_numeru(numer):
   return tuple((int(c), "") if c.isdigit() else (0, c.lower()) for c in czesci if c)
 
 
-def zapisz_liste_rozbiorek(rozbiorki):
-  """Czytelna lista adresow do rozbiorki, pogrupowana po miejscowosciach."""
+def zapisz_liste_rozbiorek():
+  """Czytelna lista adresow do rozbiorki, pogrupowana po miejscowosciach.
+
+  Sklada sie z plikow wariant-*-rozbiorka.csv lezacych na dysku, nie z danych
+  w pamieci — dzieki temu jest kompletna takze wtedy, gdy przeliczany byl
+  tylko jeden wariant."""
+  sciezka_pods = "{}/podsumowanie.csv".format(KATALOG_WYNIKOW)
+  szacunki = {}
+  if os.path.exists(sciezka_pods):
+    pods = pd.read_csv(sciezka_pods).fillna({"szacunek": ""})
+    szacunki = dict(zip(pods["wariant"], pods["szacunek"] == "tak"))
+
   L = ["# Adresy przeznaczone do rozbiorki", ""]
   L.append("Punkty adresowe lezace w sladzie drogi lub w pasie wykopu nad tunelem")
   L.append("budowanym metoda odkrywkowa. Zrodlo: PRG (GUGiK), stan z danych wejsciowych.")
   L.append("")
-  for (wariant, metoda), adresy in sorted(rozbiorki.items()):
-    L.append("## Wariant {} — metoda {}".format(wariant, metoda))
+  for wariant in consts.VARIANTS:
+    plik = "{}/wariant-{}-rozbiorka.csv".format(KATALOG_WYNIKOW, wariant)
+    if not os.path.exists(plik):
+      continue
+    adresy = pd.read_csv(plik)
+    szacowany = szacunki.get(wariant, False)
+    L.append("## Wariant {}{}".format(wariant, " — SZACUNEK" if szacowany else ""))
     L.append("")
+    if szacowany:
+      L.append("> Materialy nie zawieraja dla tego wariantu warstw skarp. Slad")
+      L.append("> policzono z samego pobocza, poszerzonego o sredni margines")
+      L.append("> {:.1f} m na strone, zmierzony na pozostalych wariantach.".format(
+          consts.MARGINES_SKARP))
+      L.append("")
     if adresy.empty:
       L.append("_Brak adresow._\n")
       continue
@@ -204,7 +226,7 @@ def zapisz_liste_rozbiorek(rozbiorki):
     adresy = adresy.assign(_klucz=adresy["NUMER_PORZ"].map(_klucz_numeru))
     for msc, grupa in adresy.groupby("NAZWA_MSC", sort=True, dropna=False):
       grupa = grupa.sort_values(["NAZWA_ULC", "_klucz"], na_position="first")
-      L.append("### {} ({})".format(msc, len(grupa)))
+      L.append("### {} ({})".format(_tekst(msc), len(grupa)))
       L.append("")
       L.append("| ulica | nr | kod | kategoria |")
       L.append("|---|---|---|---|")
@@ -217,55 +239,65 @@ def zapisz_liste_rozbiorek(rozbiorki):
     f.write("\n".join(L) + "\n")
 
 
-def generate(warianty=None, metody=None, zapisz_slad=True, postep=print):
+def generate(warianty=None, zapisz_slad=True, postep=print):
   warianty = warianty or consts.VARIANTS
-  metody = metody or consts.METODY
   os.makedirs(KATALOG_WYNIKOW, exist_ok=True)
 
   podsumowania = []
-  rozbiorki = {}
   for wariant in warianty:
-    for metoda in metody:
-      postep("Wariant {} / metoda {}:".format(wariant, metoda))
-      adresy, warstwy = policz(wariant, metoda, postep)
-      if adresy is None:
-        postep("  pomijam — brak warstw skarp w tym wariancie")
-        continue
+    postep("Wariant {}:".format(wariant))
+    adresy, warstwy, szacowany = policz(wariant, postep)
+    if adresy is None:
+      postep("  pomijam — brak warstw opisujacych droge")
+      continue
 
-      podstawa = "{}/wariant-{}-{}".format(KATALOG_WYNIKOW, wariant, metoda)
-      adresy.drop(columns="geometry").to_csv(podstawa + "-adresy.csv", index=False)
+    podstawa = "{}/wariant-{}".format(KATALOG_WYNIKOW, wariant)
+    adresy.drop(columns="geometry").to_csv(podstawa + "-adresy.csv", index=False)
 
-      # Lista do rozbiorki: slad powierzchniowy + pas odkrywki nad tunelem.
-      rozbiorka = adresy[adresy["strefa"].isin([W_SLADZIE, NAD_TUNELEM])]
-      rozbiorka = rozbiorka.assign(
-          _klucz=rozbiorka["NUMER_PORZ"].map(_klucz_numeru)).sort_values(
-          ["NAZWA_MSC", "NAZWA_ULC", "_klucz"], na_position="first").drop(
-          columns="_klucz")
-      rozbiorka.drop(columns="geometry").to_csv(podstawa + "-rozbiorka.csv", index=False)
-      rozbiorki[(wariant, metoda)] = rozbiorka
+    # Lista do rozbiorki: slad powierzchniowy + pas odkrywki nad tunelem.
+    rozbiorka = adresy[adresy["strefa"].isin([W_SLADZIE, NAD_TUNELEM])]
+    rozbiorka = rozbiorka.assign(
+        _klucz=rozbiorka["NUMER_PORZ"].map(_klucz_numeru)).sort_values(
+        ["NAZWA_MSC", "NAZWA_ULC", "_klucz"], na_position="first").drop(
+        columns="_klucz")
+    rozbiorka.drop(columns="geometry").to_csv(podstawa + "-rozbiorka.csv", index=False)
 
-      if zapisz_slad:
-        rodzaje, geom = [], []
-        for nazwa in ("powierzchnia", "tunel"):
-          if warstwy.get(nazwa) is not None and not shapely.is_empty(warstwy[nazwa]):
-            rodzaje.append(nazwa)
-            geom.append(warstwy[nazwa])
-        gpd.GeoDataFrame({"rodzaj": rodzaje}, geometry=geom,
-                         crs=consts.CRS_METRYCZNY).to_file(
-            podstawa + "-slad.gpkg", driver="GPKG")
+    if zapisz_slad:
+      rodzaje, geom = [], []
+      for nazwa in ("powierzchnia", "tunel"):
+        if warstwy.get(nazwa) is not None and not shapely.is_empty(warstwy[nazwa]):
+          rodzaje.append(nazwa)
+          geom.append(warstwy[nazwa])
+      gpd.GeoDataFrame({"rodzaj": rodzaje}, geometry=geom,
+                       crs=consts.CRS_METRYCZNY).to_file(
+          podstawa + "-slad.gpkg", driver="GPKG")
 
-      wiersz = podsumuj(wariant, metoda, adresy)
-      podsumowania.append(wiersz)
-      postep("  do rozbiorki {} ({} w sladzie + {} nad tunelem), ≤200 m {}".format(
-          wiersz[DO_ROZBIORKI], wiersz[W_SLADZIE], wiersz[NAD_TUNELEM],
-          wiersz["≤{} m".format(consts.STREFY[-1])]))
+    wiersz = podsumuj(wariant, adresy, szacowany)
+    podsumowania.append(wiersz)
+    postep("  do rozbiorki {} ({} w sladzie + {} nad tunelem), ≤200 m {}{}".format(
+        wiersz[DO_ROZBIORKI], wiersz[W_SLADZIE], wiersz[NAD_TUNELEM],
+        wiersz["≤{} m".format(consts.STREFY[-1])],
+        "  [SZACUNEK]" if szacowany else ""))
 
   if not podsumowania:
     return None
-  zapisz_liste_rozbiorek(rozbiorki)
   tabela = pd.DataFrame(podsumowania)
-  tabela.to_csv("{}/podsumowanie.csv".format(KATALOG_WYNIKOW), index=False)
+
+  # Przy liczeniu podzbioru wariantow dopisujemy sie do istniejacego
+  # podsumowania, zamiast je zastapic — inaczej "--wariant B" kasowalby
+  # z tabeli wyniki pozostalych wariantow.
+  sciezka = "{}/podsumowanie.csv".format(KATALOG_WYNIKOW)
+  if os.path.exists(sciezka) and len(warianty) < len(consts.VARIANTS):
+    stara = pd.read_csv(sciezka).fillna({"szacunek": ""})
+    stara = stara[~stara["wariant"].isin(tabela["wariant"])]
+    tabela = pd.concat([stara, tabela], ignore_index=True)
+  tabela = tabela.sort_values("wariant").reset_index(drop=True)
+  tabela.to_csv(sciezka, index=False)
+  zapisz_liste_rozbiorek()
   postep("\n" + tabela.to_string(index=False))
+  if any(w["szacunek"] for w in podsumowania):
+    postep("\n[SZACUNEK] — brak warstw skarp w materialach; slad z pobocza"
+           " poszerzony o {:.1f} m na strone.".format(consts.MARGINES_SKARP))
   postep("\nZapisano {}/podsumowanie.csv i {}/rozbiorka.md".format(
       KATALOG_WYNIKOW, KATALOG_WYNIKOW))
   return tabela

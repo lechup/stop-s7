@@ -25,11 +25,6 @@ WZORCE = {
     "bufor500": r"^(otrasyS7_\d+|trasa)\.json___2_$",
 }
 
-# Metody wyznaczania sladu drogi.
-DOKLADNA = "dokladna"      # obszar miedzy zewnetrznymi liniami skarp
-UPROSZCZONA = "uproszczona"  # bufor osi o stalej szerokosci
-METODY = [DOKLADNA, UPROSZCZONA]
-
 # Warstwy "pobocze" i "skarpy" obejmuja zarowno S7, jak i BDI, wiec metoda
 # uproszczona buforuje obie osie — inaczej porownywalaby inny zakres drogi
 # niz metoda dokladna (BDI to 4,24 km przy 19,32 km S7 w wariancie A).
@@ -38,8 +33,16 @@ OSIE = ["os", "os_bdi"]
 # Progi stref odlegloci od sladu drogi [m].
 STREFY = [20, 30, 50, 200]
 
-# Polowa szerokosci pasa w metodzie uproszczonej [m].
-SZEROKOSC_UPROSZCZONA = 30
+# Sredni margines skarp na jedna strone drogi [m] — o tyle zajecie terenu
+# jest szersze niz sam pas jezdni. Zmierzone na wariantach, ktore maja warstwy
+# skarp (A, C, D, E, F): +8,7 / +9,2 / +5,3 / +5,6 / +9,6 m.
+#
+# Sluzy wylacznie do doszacowania wariantu B, ktoremu w materialach brakuje
+# warstw skarp — jego slad liczony jest z samego pobocza i poszerzany o te
+# wartosc. Wynik jest SZACUNKIEM, oznaczonym w raporcie; rozrzut zrodlowy
+# oznacza niepewnosc rzedu +/- 2 m szerokosci sladu.
+# Przeliczenie: ./uruchom.sh --mode margines
+MARGINES_SKARP = 7.7
 
 # Polowa szerokosci wykopu nad tunelem [m]. Tunele budowane metoda odkrywkowa
 # wymagaja wykopu mniej wiecej tak szerokiego jak droga na powierzchni —

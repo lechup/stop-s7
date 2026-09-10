@@ -8,16 +8,17 @@ Ile punktów adresowych leży w śladzie projektowanej drogi S7, a ile w strefac
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 python3 pobierz_dane.py      # dane wejściowe (96 MB, po rozpakowaniu 1,3 GB)
-./uruchom.sh                 # policz wszystkie warianty, obiema metodami
+./uruchom.sh                 # policz wszystkie warianty
 ```
 
 Przykłady:
 
 ```bash
-./uruchom.sh --wariant A --metoda dokladna   # jeden wariant, jedna metoda
-./uruchom.sh --bez-sladu                     # bez zapisu GPKG
-./uruchom.sh --mode debug                    # wykaz warstw w plikach GML
-LIMIT=8G ./uruchom.sh                        # podnieś limit pamięci
+./uruchom.sh --wariant A --wariant C   # wybrane warianty
+./uruchom.sh --bez-sladu               # bez zapisu GPKG
+./uruchom.sh --mode debug              # wykaz warstw w plikach GML
+./uruchom.sh --mode margines           # przelicz średni margines skarp
+LIMIT=8G ./uruchom.sh                  # podnieś limit pamięci
 ```
 
 **Licz przez `uruchom.sh`, nie przez `python raport.py`.** Wrapper uruchamia
@@ -28,19 +29,33 @@ i edytor — zamiast samego skryptu.
 
 ## Co liczy
 
-**Ślad drogi** wyznaczany jest dwiema metodami, podawanymi w raporcie obok siebie:
+**Ślad drogi** to obszar między zewnętrznymi liniami skarp — teren faktycznie
+zajęty pod budowę, średnio 46–49 m szerokości. Warstwy opisujące drogę to linie
+(krawędzie jezdni, skarpy), nie poligony, więc ślad składany jest z nich przez
+domknięcie morfologiczne. Szczegóły i kalibracja: [warstwy.md](warstwy.md).
 
-| metoda | jak | dla kogo |
-|---|---|---|
-| `dokladna` | obszar między zewnętrznymi liniami skarp — realne zajęcie terenu (śr. 54 m szerokości) | ile adresów fizycznie znika pod drogą |
-| `uproszczona` | bufor osi trasy ±30 m | porównanie A–F jednakową miarą |
+### Wariant B jest szacowany
 
-Warstwy opisujące drogę to linie (krawędzie jezdni, skarpy), nie poligony, więc
-metoda dokładna składa z nich obszar przez domknięcie morfologiczne. Szczegóły
-i kalibracja promienia: [warstwy.md](warstwy.md).
+Materiały nie zawierają dla wariantu B warstw skarp — ma tylko krawędzie jezdni.
+Jego ślad liczony jest więc z samego pobocza i poszerzany o średni margines skarp
+zmierzony na pozostałych wariantach:
 
-Wariant **B nie ma w materiałach warstw skarp**, więc liczy się wyłącznie metodą
-uproszczoną.
+| wariant | margines skarp na stronę |
+|---|---|
+| A | +8,7 m |
+| C | +9,2 m |
+| D | +5,3 m |
+| E | +5,6 m |
+| F | +9,6 m |
+| **średnia** | **+7,7 m** |
+
+Ślad wariantu B powstaje więc z jego własnych krawędzi jezdni, poszerzonych
+o 7,7 m w każdą stronę. Rozrzut źródłowy (od +5,3 do +9,6 m) przekłada się na
+niepewność rzędu ±2 m szerokości śladu, więc **liczby dla B są szacunkiem** —
+oznaczonym w kolumnie `szacunek` w podsumowaniu i nagłówkiem w `rozbiorka.md`.
+
+Margines siedzi w `MARGINES_SKARP` w [consts.py](consts.py); przelicza go
+`./uruchom.sh --mode margines`.
 
 ### Tunele
 
@@ -72,11 +87,11 @@ W katalogu `raporty/`:
 
 | plik | zawartość |
 |---|---|
-| `podsumowanie.csv` | wiersz na wariant × metodę, liczby w strefach |
+| `podsumowanie.csv` | wiersz na wariant, liczby w strefach, kolumna `szacunek` |
 | `rozbiorka.md` | listy adresów do rozbiórki, pogrupowane po miejscowościach |
-| `wariant-X-<metoda>-rozbiorka.csv` | te same adresy w formie tabelarycznej |
-| `wariant-X-<metoda>-adresy.csv` | wszystkie adresy do 200 m: odległość i strefa |
-| `wariant-X-<metoda>-slad.gpkg` | geometria korytarza (warstwy `powierzchnia` i `tunel`) do QGIS |
+| `wariant-X-rozbiorka.csv` | te same adresy w formie tabelarycznej |
+| `wariant-X-adresy.csv` | wszystkie adresy do 200 m: odległość i strefa |
+| `wariant-X-slad.gpkg` | geometria korytarza (warstwy `powierzchnia` i `tunel`) do QGIS |
 
 ## Wiarygodność
 
