@@ -1,5 +1,6 @@
 """Zliczanie punktow adresowych wzgledem sladu drogi."""
 
+import glob
 import os
 import re
 
@@ -11,12 +12,54 @@ import shapely
 import consts
 import geometria
 
-ADRESY = "wojewodztwa-adresy/malopolska/NOWE_PRG_PunktyAdresowe_12.shp"
+KATALOG_ADRESOW = "wojewodztwa-adresy"
+WZORZEC_ADRESOW = "*PunktyAdresowe*.shp"
+
+_plik_adresow = None
 
 
 def znajdz_plik_adresow():
-  """Sciezka do pliku z punktami adresowymi."""
-  return ADRESY
+  """Znajduje plik z punktami adresowymi, rozpoznajac go po zawartosci.
+
+  Nie mozna polegac na nazwie. GUGiK od 1 lipca 2026 publikuje dane adresowe
+  tylko w nowej strukturze i przy tej okazji usunal prefiks "NOWE_" — plik
+  nazywa sie teraz PRG_PunktyAdresowe_*, ale dokladnie taka nazwe nosila
+  wczesniej STARA struktura, o zupelnie innych polach (Numer, ULIC_nazwa,
+  SIMC_nazwa zamiast NUMER_PORZ, NAZWA_ULC, NAZWA_MSC). Sama nazwa nie mowi
+  wiec nic — decyduje obecnosc wymaganych kolumn."""
+  global _plik_adresow
+  if _plik_adresow:
+    return _plik_adresow
+
+  kandydaci = sorted(glob.glob(
+      os.path.join(KATALOG_ADRESOW, "**", WZORZEC_ADRESOW), recursive=True))
+  if not kandydaci:
+    raise SystemExit(
+        "Nie znalazlem pliku z punktami adresowymi ({}/**/{}).\n"
+        "Pobierz dane: python3 pobierz_dane.py".format(
+            KATALOG_ADRESOW, WZORZEC_ADRESOW))
+
+  odrzucone = []
+  for sciezka in kandydaci:
+    try:
+      pola = set(pyogrio.read_info(sciezka)["fields"])
+    except Exception as blad:
+      odrzucone.append((sciezka, str(blad)[:50]))
+      continue
+    brakuje = [k for k in KOLUMNY if k not in pola]
+    if brakuje:
+      odrzucone.append((sciezka, "brak pol: " + ", ".join(brakuje)))
+      continue
+    _plik_adresow = sciezka
+    return sciezka
+
+  raise SystemExit(
+      "Znalazlem pliki z adresami, ale zaden nie ma wymaganych pol ({}).\n"
+      "{}\n"
+      "Prawdopodobnie to dane w starej strukturze, wycofanej przez GUGiK\n"
+      "1 lipca 2026. Pobierz aktualny pakiet PRG.".format(
+          ", ".join(KOLUMNY),
+          "\n".join("  {} — {}".format(p, d) for p, d in odrzucone)))
 KOLUMNY = ["NUMER_PORZ", "NAZWA_ULC", "NAZWA_MSC", "NAZWA_GMI", "KOD_POCZT"]
 KATALOG_WYNIKOW = "raporty"
 
@@ -36,7 +79,7 @@ def wczytaj_adresy(obszar):
   minx, miny, maxx, maxy = shapely.bounds(obszar)
   m = max(consts.STREFY)
   gdf = gpd.read_file(
-      ADRESY,
+      znajdz_plik_adresow(),
       bbox=(minx - m, miny - m, maxx + m, maxy + m),
       columns=KOLUMNY,
   )
@@ -349,6 +392,31 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
   return tabela
 
 
+def informacje_o_danych():
+  """Co skrypt faktycznie czyta — do sprawdzenia po odswiezeniu danych."""
+  sciezka = znajdz_plik_adresow()
+  info = pyogrio.read_info(sciezka)
+  stan = stan_danych()
+  print("Punkty adresowe:")
+  print("  plik      : {}".format(sciezka))
+  print("  rekordow  : {}".format(info.get("features")))
+  print("  uklad     : {}".format((info.get("crs") or "?")[:60]))
+  print("  pola      : {}".format(", ".join(info.get("fields", []))))
+  print("  stan danych: {}".format(stan.strftime("%d.%m.%Y") if stan else "nieustalony"))
+  print()
+  print("Warianty:")
+  for wariant in consts.VARIANTS:
+    sciezka_gml = geometria.sciezka(wariant)
+    if not os.path.exists(sciezka_gml):
+      print("  {}: BRAK PLIKU {}".format(wariant, sciezka_gml))
+      continue
+    nazwy = geometria.nazwy_warstw(wariant)
+    braki = [r for r in ("os", "jezdnia", "skarpy") if not consts.dopasuj(nazwy, r)]
+    print("  {}: warstw {:<3} {}".format(
+        wariant, len(nazwy),
+        "komplet" if not braki else "brak: " + ", ".join(braki)))
+
+
 def debug():
   """Inwentarz warstw w plikach GML — nazwy, typy, liczby obiektow."""
   for wariant in consts.VARIANTS:
@@ -385,7 +453,7 @@ def znajdz_adres(zapytanie):
   else:
     warunek = ("NAZWA_ULC LIKE '%{0}%' OR NAZWA_MSC LIKE '%{0}%'".format(bezpieczna))
 
-  gdf = gpd.read_file(ADRESY, columns=KOLUMNY, where=warunek)
+  gdf = gpd.read_file(znajdz_plik_adresow(), columns=KOLUMNY, where=warunek)
   if gdf.empty:
     return gdf
   if nazwa:

@@ -9,10 +9,11 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument(
     "--mode",
-    choices=[consts.GENERATE_CHOICE, consts.DEBUG_CHOICE, "margines"],
+    choices=[consts.GENERATE_CHOICE, consts.DEBUG_CHOICE, "margines", "dane"],
     default=consts.GENERATE_CHOICE,
     help="'generate' liczy raporty, 'debug' wypisuje warstwy w plikach GML, "
-         "'margines' przelicza sredni margines skarp (consts.MARGINES_SKARP)"
+         "'margines' przelicza sredni margines skarp, "
+         "'dane' pokazuje na jakich danych skrypt liczy"
 )
 parser.add_argument(
     "--wariant",
@@ -39,6 +40,8 @@ if __name__ == "__main__":
         functions.sprawdz_adres(args.adres)
     elif args.mode == consts.DEBUG_CHOICE:
         functions.debug()
+    elif args.mode == "dane":
+        functions.informacje_o_danych()
     elif args.mode == "margines":
         geometria.zmierz_margines(args.wariant)
     else:

@@ -18,6 +18,7 @@ Przykłady:
 ./uruchom.sh --bez-sladu               # bez zapisu GPKG
 ./uruchom.sh --mode debug              # wykaz warstw w plikach GML
 ./uruchom.sh --mode margines           # przelicz średni margines skarp
+./uruchom.sh --mode dane               # na jakich danych skrypt liczy
 ./uruchom.sh --adres "Osterwy 41P"     # sprawdź pojedynczy adres
 LIMIT=8G ./uruchom.sh                  # podnieś limit pamięci
 ```
@@ -153,6 +154,26 @@ python3 pobierz_dane.py --keep    # zostaw archiwa w dane-archiwa/
 Skrypt korzysta tylko z biblioteki standardowej, więc można go uruchomić
 przed instalacją zależności. Sprawdza sumy sha256, a przy niezgodności
 przerywa i kasuje pobrany plik.
+
+### Rozpoznawanie pliku adresowego
+
+Skrypt nie polega na nazwie pliku, tylko szuka pod `wojewodztwa-adresy/`
+czegokolwiek pasującego do `*PunktyAdresowe*.shp` i wybiera plik, który **ma
+wymagane kolumny**. Powód: GUGiK od 1 lipca 2026 publikuje dane adresowe tylko
+w nowej strukturze i usunął przy tym prefiks `NOWE_`. Plik nazywa się teraz
+`PRG_PunktyAdresowe_*` — ale dokładnie taką nazwę nosiła wcześniej **stara**
+struktura, o zupełnie innych polach:
+
+| struktura | pola |
+|---|---|
+| stara (wycofana) | `TERYT, PNA, SIMC_id, SIMC_nazwa, ULIC_id, ULIC_nazwa, Numer` |
+| nowa (używana) | `ID_IIP, NUMER_PORZ, KOD_POCZT, DATA_NAD, NAZWA_ULC, NAZWA_GMI, NAZWA_MSC, ...` |
+
+Sama nazwa nie mówi więc nic. Jeśli żaden znaleziony plik nie ma wymaganych
+kolumn, skrypt przerywa i mówi wprost, że to prawdopodobnie stara struktura.
+
+`./uruchom.sh --mode dane` pokazuje, który plik został wybrany, ile ma rekordów
+i do kiedy sięgają dane (najnowsza sensowna data nadania adresu).
 
 ### Źródło danych
 
