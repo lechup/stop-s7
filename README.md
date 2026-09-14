@@ -246,7 +246,12 @@ Wpisanie adresu pokazuje odległość i strefę we wszystkich wariantach naraz �
 to odpowiednik trybu `--adres`, tyle że w przeglądarce. Budynki i adresy widać
 we wszystkich strefach do 200 m, a każdą strefę da się osobno odkliknąć
 (skróty `tylko ślad` i `wszystkie`), żeby odsiać tło i zobaczyć sam pas zajęcia
-terenu. Widok zapisuje się
+terenu.
+
+Przy każdej strefie stoi liczba adresów i budynków, a pod spodem suma tego, co
+aktualnie widać na mapie — reagująca zarówno na odklikanie strefy, jak i całej
+warstwy. Liczby zgadzają się z `podsumowanie.csv`, więc tabelka w panelu jest
+jednocześnie legendą i kontrolą. Widok zapisuje się
 w adresie URL (`#C/17/49.9454/19.9742`), więc da się podesłać komuś link
 prosto na jego ulicę.
 

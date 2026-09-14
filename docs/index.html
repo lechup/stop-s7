@@ -44,6 +44,19 @@
   table.strefy td.odl { text-align: right; font-variant-numeric: tabular-nums; }
   .znacznik { display: inline-block; width: 11px; height: 11px; border-radius: 2px;
               margin-right: 6px; vertical-align: -1px; }
+  table.strefy-tab { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.strefy-tab th { font-size: 11px; font-weight: 600; color: var(--przygasly);
+                        text-transform: uppercase; letter-spacing: .03em;
+                        text-align: right; padding: 0 0 4px; }
+  table.strefy-tab th:first-child { text-align: left; }
+  table.strefy-tab td { padding: 3px 0; vertical-align: middle; }
+  table.strefy-tab td.liczba { text-align: right; font-variant-numeric: tabular-nums;
+                               padding-left: 10px; color: var(--przygasly); }
+  table.strefy-tab tr.razem td { border-top: 1px solid var(--ramka); padding-top: 6px;
+                                 font-weight: 600; color: var(--tekst); }
+  table.strefy-tab tr.wylaczona td.liczba,
+  table.strefy-tab tr.wylaczona td label { opacity: .4; }
+  table.strefy-tab label { display: flex; align-items: center; gap: 7px; cursor: pointer; }
   .legenda div { font-size: 13px; padding: 2px 0; }
   .uwaga { font-size: 12px; color: var(--przygasly); }
   .szacunek { font-size: 11px; background: #fde; color: #91004a; padding: 1px 5px;
@@ -87,21 +100,17 @@
     </div>
 
     <div class="sekcja">
-      <h2>Strefy</h2>
-      <div id="strefy"></div>
+      <h2>Strefy i liczby</h2>
+      <table class="strefy-tab">
+        <thead><tr><th>strefa</th><th>adresy</th><th>budynki</th></tr></thead>
+        <tbody id="strefy"></tbody>
+        <tfoot><tr class="razem"><td>razem wyświetlone</td>
+          <td class="liczba" id="razem-adresy">—</td>
+          <td class="liczba" id="razem-budynki">—</td></tr></tfoot>
+      </table>
       <p class="info" style="margin-top:6px">
         <a href="#" id="tylko-slad">tylko ślad</a> ·
         <a href="#" id="wszystkie-strefy">wszystkie</a></p>
-    </div>
-
-    <div class="sekcja legenda">
-      <h2>Legenda</h2>
-      <div><span class="znacznik" style="background:var(--slad)"></span>ślad drogi / w śladzie</div>
-      <div><span class="znacznik" style="background:var(--tunel)"></span>pas nad tunelem</div>
-      <div><span class="znacznik" style="background:var(--s20)"></span>0–20 m</div>
-      <div><span class="znacznik" style="background:var(--s30)"></span>20–30 m</div>
-      <div><span class="znacznik" style="background:var(--s50)"></span>30–50 m</div>
-      <div><span class="znacznik" style="background:var(--s200)"></span>50–200 m</div>
     </div>
 
     <div class="sekcja">
@@ -202,6 +211,38 @@ function strefaObiektu(p) {
 function strefaWlaczona(strefa) {
   if (strefa === BEZ_STREFY) return true;
   const pole = document.querySelector('[data-strefa="' + strefa + '"]');
+  return !pole || pole.checked;
+}
+
+// Liczby przy przelacznikach: ile obiektow jest w kazdej strefie i ile widac
+// lacznie. Bez tego trzeba je zgadywac z mapy.
+function odswiezLiczby() {
+  let sumaA = 0, sumaB = 0;
+  for (const strefa of STREFY_NAZWY) {
+    const wiersz = document.querySelector('[data-wiersz="' + strefa + '"]');
+    if (!wiersz) continue;
+    const liczby = {};
+    for (const warstwa of ["adresy", "budynki"]) {
+      const grupa = podgrupy[warstwa][strefa];
+      liczby[warstwa] = grupa ? grupa.getLayers().length : 0;
+      wiersz.querySelector('[data-liczba="' + warstwa + '"]').textContent =
+        liczby[warstwa].toLocaleString("pl-PL");
+    }
+    const wlaczona = strefaWlaczona(strefa);
+    wiersz.classList.toggle("wylaczona", !wlaczona);
+    if (wlaczona) {
+      // Suma odzwierciedla to, co faktycznie widac: liczy sie takze wylaczenie
+      // calej warstwy, nie tylko strefy.
+      if (warstwaWlaczona("adresy")) sumaA += liczby.adresy;
+      if (warstwaWlaczona("budynki")) sumaB += liczby.budynki;
+    }
+  }
+  document.getElementById("razem-adresy").textContent = sumaA.toLocaleString("pl-PL");
+  document.getElementById("razem-budynki").textContent = sumaB.toLocaleString("pl-PL");
+}
+
+function warstwaWlaczona(nazwa) {
+  const pole = document.querySelector('[data-warstwa="' + nazwa + '"]');
   return !pole || pole.checked;
 }
 
@@ -323,6 +364,7 @@ async function pokazWariant(wariant) {
     mapa.__dopasowano = true;
   }
   odswiezOpis();
+  odswiezLiczby();
   zapiszStanUrl();
 }
 
@@ -418,13 +460,18 @@ WARIANTY.forEach(w => {
 
 const pojemnikStref = document.getElementById("strefy");
 STREFY_NAZWY.forEach((strefa, i) => {
-  const etykieta = document.createElement("label");
-  etykieta.className = "przelacznik";
-  etykieta.innerHTML = '<input type="checkbox" data-strefa="' + strefa +
-    '" checked> <span class="znacznik" style="background:' +
-    BARWY_HEX[i + 1] + '"></span>' + strefa;
-  etykieta.querySelector("input").addEventListener("change", odswiezStrefy);
-  pojemnikStref.appendChild(etykieta);
+  const wiersz = document.createElement("tr");
+  wiersz.dataset.wiersz = strefa;
+  wiersz.innerHTML =
+    '<td><label><input type="checkbox" data-strefa="' + strefa + '" checked>' +
+    '<span class="znacznik" style="background:' + BARWY_HEX[i + 1] + '"></span>' +
+    strefa + "</label></td>" +
+    '<td class="liczba" data-liczba="adresy">–</td>' +
+    '<td class="liczba" data-liczba="budynki">–</td>';
+  wiersz.querySelector("input").addEventListener("change", () => {
+    odswiezStrefy(); odswiezLiczby();
+  });
+  pojemnikStref.appendChild(wiersz);
 });
 
 function ustawStrefy(wlaczone) {
@@ -432,6 +479,7 @@ function ustawStrefy(wlaczone) {
     pole.checked = wlaczone === "wszystkie" ? true : i < 2;
   });
   odswiezStrefy();
+  odswiezLiczby();
 }
 document.getElementById("tylko-slad").addEventListener("click", e => {
   e.preventDefault(); ustawStrefy("slad");
@@ -444,6 +492,7 @@ document.querySelectorAll("[data-warstwa]").forEach(pole => {
   pole.addEventListener("change", () => {
     const warstwa = warstwyMapy[pole.dataset.warstwa];
     if (pole.checked) mapa.addLayer(warstwa); else mapa.removeLayer(warstwa);
+    odswiezLiczby();
   });
 });
 
