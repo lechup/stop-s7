@@ -1,3 +1,13 @@
+"""Statystyki S7 — ile adresow lezy w sladzie drogi i w strefach od niego.
+
+Copyright (C) 2026 Leszek Piatek
+
+Ten program jest wolnym oprogramowaniem: mozesz go rozpowszechniac i/lub
+modyfikowac na warunkach Licencji AGPL GNU w wersji 3, opublikowanej przez
+Free Software Foundation. Program rozpowszechniany jest w nadziei, ze bedzie
+uzyteczny, ale BEZ JAKIEJKOLWIEK GWARANCJI. Szczegoly w pliku LICENSE.
+"""
+
 import argparse
 
 import consts

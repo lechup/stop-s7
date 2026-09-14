@@ -497,6 +497,33 @@ aktualizowany jest na bieżąco w dni robocze. Jeden release zawiera komplet
 z danego rocznika: archiwa wejściowe i wyliczone z nich raporty, żeby nie dało
 się pomylić, które wyniki pochodzą z których danych.
 
+## Licencja
+
+Kod: **[AGPLv3](LICENSE)** (GNU Affero General Public License v3).
+
+Wybór padł na AGPL, a nie zwykłą GPL, z konkretnego powodu. Copyleft w GPL
+uruchamia się przy *dystrybucji*, a ktoś, kto weźmie ten kod, po cichu zmieni
+metodę — zawęzi ślad drogi, wytnie strefę nad tunelem — i postawi to pod swoim
+adresem, niczego nie dystrybuuje. Świadczy usługę i pod GPL nie jest nikomu
+winien ani linijki źródła. AGPL zamyka to w §13: kto udostępnia zmodyfikowaną
+wersję przez sieć, musi udostępnić jej źródła użytkownikom tej strony.
+
+Przy projekcie, którego cała wiarygodność stoi na odtwarzalności metody, to nie
+jest niuans prawniczy. Inne inicjatywy walczące o swój odcinek drogi nadal mogą
+wszystko wziąć i przerobić — pod warunkiem, że ich wersja też będzie jawna.
+
+**Licencja obejmuje kod, nie dane.** Dane wejściowe mają własne warunki:
+
+| co | źródło | warunki |
+|---|---|---|
+| punkty adresowe | PRG (GUGiK) | bezpłatnie, do dowolnego wykorzystania |
+| obrysy budynków | EGiB (GUGiK) | geometria z podstawowymi atrybutami bezpłatnie, do dowolnego wykorzystania |
+| warianty przebiegu | materiały konsultacji społecznych | — |
+
+Wyliczone raporty (`podsumowanie.csv`, `rozbiorka.md`) powstały z danych
+publicznych i można je cytować; przy powoływaniu się warto podać źródło
+i rocznik danych, bo PRG aktualizowany jest na bieżąco.
+
 ## Pliki
 
 - [raport.py](raport.py) — punkt wejścia, obsługa argumentów
