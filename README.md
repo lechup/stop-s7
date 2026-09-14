@@ -307,6 +307,12 @@ Zgodnie z informacją na Geoportalu dane PRG są udostępniane bezpłatnie
 i do dowolnego wykorzystania. Wykorzystany zestaw to punkty adresowe
 dla województwa małopolskiego (kod 12) — 866 938 rekordów, EPSG:2180.
 
+Obrysy budynków pochodzą z **Ewidencji Gruntów i Budynków (EGiB)**, pobierane
+zbiorczą usługą WFS GUGiK — szczegóły, warunki wykorzystania i podstawa prawna
+w sekcji [Obrysy budynków (EGiB)](#obrysy-budynków-egib) wyżej:
+
+<https://mapy.geoportal.gov.pl/wss/service/PZGIK/EGIB/WFS/UslugaZbiorcza>
+
 Pliki GML z wariantami przebiegu trasy pochodzą z materiałów
 z konsultacji społecznych dotyczących przebiegu S7.
 
