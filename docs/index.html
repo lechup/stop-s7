@@ -153,6 +153,15 @@ const STREFY_NAZWY = ["w śladzie", "nad tunelem", "0-20 m", "20-30 m",
 const BEZ_STREFY = "—";
 const podgrupy = {};   // warstwa -> strefa -> L.LayerGroup
 
+// Kolejnosc rysowania przez panes, a nie przez kolejnosc dodawania warstw:
+// przelaczanie stref zdejmuje i dodaje grupy z powrotem, co bez tego
+// wypychaloby wlasnie wlaczona warstwe na wierzch. Adresy musza byc nad
+// budynkami, inaczej klikniecie w punkt trafia w obrys pod nim.
+const KOLEJNOSC = { korytarz: 410, budynki: 450, adresy: 490 };
+for (const [nazwa, zindex] of Object.entries(KOLEJNOSC)) {
+  mapa.createPane("pane-" + nazwa).style.zIndex = zindex;
+}
+
 for (const nazwa of ["korytarz", "budynki", "adresy"]) {
   warstwyMapy[nazwa] = L.layerGroup().addTo(mapa);
   podgrupy[nazwa] = {};
@@ -204,24 +213,26 @@ function kodStrefyZNazwy(nazwa) {
 function promienPunktu() {
   // Przy oddaleniu setki punktow zlewaly sie w plame zaslaniajaca trase.
   const z = mapa.getZoom();
-  return z >= 16 ? 6 : z >= 14 ? 4.5 : z >= 12 ? 3 : 2;
+  return z >= 16 ? 7 : z >= 14 ? 5.5 : z >= 12 ? 4 : 3;
 }
 
 function stylObiektu(obiekt) {
   const p = obiekt.properties;
+  const pane = "pane-" + p.warstwa;
   if (p.warstwa === "korytarz") {
     const tunel = p.rodzaj === "tunel";
     // Slad ma ok. 50 m szerokosci, czyli przy oddaleniu mniej niz piksel —
     // bez wyraznego obrysu trasa znika pod punktami adresowymi.
-    return { color: tunel ? BARWY_HEX[2] : BARWY_HEX[1], weight: 2.5,
+    return { pane: pane, color: tunel ? BARWY_HEX[2] : BARWY_HEX[1], weight: 2.5,
              opacity: 0.95, fillColor: tunel ? BARWY_HEX[2] : BARWY_HEX[1],
              fillOpacity: 0.35 };
   }
   if (p.warstwa === "budynki") {
     const kod = kodStrefyZNazwy(p.strefa);
-    return { color: "#333", weight: 0.8, fillColor: BARWY_HEX[kod] || "#666", fillOpacity: 0.85 };
+    return { pane: pane, color: "#333", weight: 0.8,
+             fillColor: BARWY_HEX[kod] || "#666", fillOpacity: 0.85 };
   }
-  return {};
+  return { pane: pane };
 }
 
 function opisObiektu(p) {
@@ -257,6 +268,7 @@ async function pokazWariant(wariant) {
   L.geoJSON(dane, {
     style: stylObiektu,
     pointToLayer: (obiekt, latlng) => L.circleMarker(latlng, {
+      pane: "pane-adresy",
       radius: promienPunktu(), weight: 1, color: "#222",
       fillColor: BARWY_HEX[kodStrefyZNazwy(obiekt.properties.strefa)] || "#666",
       fillOpacity: 0.9
@@ -265,9 +277,6 @@ async function pokazWariant(wariant) {
       warstwa.bindPopup(opisObiektu(obiekt.properties));
       podgrupy[obiekt.properties.warstwa][strefaObiektu(obiekt.properties)]
         .addLayer(warstwa);
-      if (obiekt.properties.warstwa === "korytarz" && warstwa.bringToBack) {
-        warstwa.bringToBack();
-      }
     }
   });
 
