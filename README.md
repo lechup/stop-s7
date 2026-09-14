@@ -248,10 +248,12 @@ we wszystkich strefach do 200 m, a każdą strefę da się osobno odkliknąć
 (skróty `tylko ślad` i `wszystkie`), żeby odsiać tło i zobaczyć sam pas zajęcia
 terenu.
 
-Budynki da się zawęzić do jednego rodzaju z EGiB — lista pod przełącznikiem
-warstwy, z liczbą obiektów przy każdej pozycji. Wybór działa jednocześnie na
-mapę i na statystyki, więc można obejrzeć same domy mieszkalne albo sprawdzić,
-gdzie stoją te dwa budynki oświatowe.
+Budynki da się zawęzić do wybranych rodzajów z EGiB — zwijana lista pod
+przełącznikiem warstwy, z liczbą obiektów przy każdej pozycji i skrótami
+`wszystkie` / `żadne`. Zaznaczyć można dowolną kombinację, a wybór działa
+jednocześnie na mapę i na statystyki: można obejrzeć same domy mieszkalne,
+albo mieszkalne razem z oświatą i opieką zdrowotną. Wybór przeżywa zmianę
+wariantu.
 
 Przy każdej strefie stoi liczba adresów i budynków, a pod spodem suma tego, co
 aktualnie widać na mapie — reagująca na odklikanie strefy, wybór rodzaju
