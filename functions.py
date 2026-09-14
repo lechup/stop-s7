@@ -89,6 +89,57 @@ SZCZEGOLOWO_DO = 5
 W_SLADZIE = "w śladzie"
 NAD_TUNELEM = "nad tunelem"
 DO_ROZBIORKI = "do rozbiórki"
+BUDYNKI = "budynki"
+BUDYNKI_MIESZKALNE = "budynki mieszkalne"
+
+PLIK_BUDYNKOW = "budynki/budynki.gpkg"
+# EGiB: "m" to budynek mieszkalny; reszta to gospodarcze, garaze, przemyslowe itd.
+RODZAJ_MIESZKALNY = "m"
+
+# Nazwy warstw w wariant-X-slad.gpkg. Korytarz musi byc adresowany po nazwie,
+# bo od kiedy plik ma kilka warstw, odczyt bez wskazania warstwy siegnalby
+# po pierwsza z brzegu.
+WARSTWA_KORYTARZ = "korytarz"
+WARSTWA_BUDYNKI = "budynki"
+WARSTWA_ADRESY = "adresy"
+
+_budynki_cache = None
+_budynki_sprawdzone = False
+
+
+def wczytaj_budynki():
+  """Obrysy budynkow z EGiB albo None, jesli ich nie pobrano.
+
+  Budynki sa opcjonalne: bez nich raport liczy sie jak dotad, tylko bez kolumn
+  budynkowych. Pobiera je pobierz_dane.py razem z reszta albo pobierz_budynki.py."""
+  global _budynki_cache, _budynki_sprawdzone
+  if not _budynki_sprawdzone:
+    _budynki_sprawdzone = True
+    if os.path.exists(PLIK_BUDYNKOW):
+      _budynki_cache = gpd.read_file(PLIK_BUDYNKOW).to_crs(consts.CRS_METRYCZNY)
+  return _budynki_cache
+
+
+def trafione_budynki(warstwy):
+  """Budynki przecinajace korytarz, z kolumna 'strefa' jak przy adresach.
+
+  Liczymy przeciecie, a nie zawieranie: budynek stojacy w polowie w sladzie
+  i tak idzie do rozbiorki. Zwraca None, gdy nie ma danych o budynkach."""
+  budynki = wczytaj_budynki()
+  if budynki is None:
+    return None
+
+  trafienia = sorted(set(budynki.sindex.query(
+      warstwy["korytarz"], predicate="intersects")))
+  trafione = budynki.iloc[trafienia].reset_index(drop=True)
+  if trafione.empty:
+    return trafione.assign(strefa=[])
+
+  w_sladzie = set(trafione.sindex.query(
+      warstwy["powierzchnia"], predicate="intersects"))
+  trafione["strefa"] = [W_SLADZIE if i in w_sladzie else NAD_TUNELEM
+                        for i in range(len(trafione))]
+  return trafione
 
 
 def wczytaj_adresy(obszar):
@@ -217,14 +268,23 @@ def policz(wariant, postep=None):
   return wynik, warstwy, szacowany
 
 
-def podsumuj(wariant, adresy, szacowany=False):
-  """Wiersz podsumowania: strefy rozlaczne + kolumny narastajace."""
+def podsumuj(wariant, adresy, szacowany=False, budynki=None):
+  """Wiersz podsumowania: strefy rozlaczne + kolumny narastajace.
+
+  Kolumny budynkowe liczone sa z obrysow EGiB i sa NIEZALEZNA miara, a nie
+  poprawka do liczby adresow: jeden budynek miewa kilka adresow albo zaden,
+  a EGiB obejmuje takze garaze i budynki gospodarcze."""
   wiersz = {"wariant": wariant}
   liczby = adresy["strefa"].value_counts() if len(adresy) else {}
   for nazwa in nazwy_stref():
     wiersz[nazwa] = int(liczby.get(nazwa, 0)) if len(adresy) else 0
 
   wiersz[DO_ROZBIORKI] = wiersz[W_SLADZIE] + wiersz[NAD_TUNELEM]
+
+  if budynki is not None:
+    wiersz[BUDYNKI] = len(budynki)
+    wiersz[BUDYNKI_MIESZKALNE] = int(
+        (budynki["RODZAJ"] == RODZAJ_MIESZKALNY).sum()) if len(budynki) else 0
 
   narastajaco = wiersz[DO_ROZBIORKI]
   poprzedni = 0
@@ -365,6 +425,7 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
       postep("  pomijam — brak warstw opisujacych droge")
       continue
 
+    budynki = trafione_budynki(warstwy)
     podstawa = "{}/wariant-{}".format(KATALOG_WYNIKOW, wariant)
     adresy.drop(columns="geometry").to_csv(podstawa + "-adresy.csv", index=False)
 
@@ -382,20 +443,39 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
         if warstwy.get(nazwa) is not None and not shapely.is_empty(warstwy[nazwa]):
           rodzaje.append(nazwa)
           geom.append(warstwy[nazwa])
+
+      sciezka_gpkg = podstawa + "-slad.gpkg"
+      # Nadpisujemy od zera, zeby po przeliczeniu bez budynkow nie zostala
+      # w pliku nieaktualna warstwa z poprzedniego uruchomienia.
+      if os.path.exists(sciezka_gpkg):
+        os.remove(sciezka_gpkg)
+
       gpd.GeoDataFrame({"rodzaj": rodzaje}, geometry=geom,
                        crs=consts.CRS_METRYCZNY).to_file(
-          podstawa + "-slad.gpkg", driver="GPKG")
+          sciezka_gpkg, driver="GPKG", layer=WARSTWA_KORYTARZ)
+      if budynki is not None and len(budynki):
+        budynki.to_file(sciezka_gpkg, driver="GPKG",
+                        layer=WARSTWA_BUDYNKI, mode="a")
+      if len(adresy):
+        adresy.to_file(sciezka_gpkg, driver="GPKG",
+                       layer=WARSTWA_ADRESY, mode="a")
 
-    wiersz = podsumuj(wariant, adresy, szacowany)
+    wiersz = podsumuj(wariant, adresy, szacowany, budynki)
     podsumowania.append(wiersz)
     postep("  do rozbiorki {} ({} w sladzie + {} nad tunelem), ≤200 m {}{}".format(
         wiersz[DO_ROZBIORKI], wiersz[W_SLADZIE], wiersz[NAD_TUNELEM],
         wiersz["≤{} m".format(consts.STREFY[-1])],
         "  [SZACUNEK]" if szacowany else ""))
+    if budynki is not None:
+      postep("  budynkow w korytarzu {} (mieszkalnych {})".format(
+          wiersz[BUDYNKI], wiersz[BUDYNKI_MIESZKALNE]))
 
   if not podsumowania:
     return None
   tabela = pd.DataFrame(podsumowania)
+  # Kolejnosc kolumn ustala swiezo policzony wiersz. Stare podsumowanie moze
+  # pochodzic sprzed dodania kolumn budynkowych i doklejaloby je na koncu.
+  kolejnosc = list(tabela.columns)
 
   # Przy liczeniu podzbioru wariantow dopisujemy sie do istniejacego
   # podsumowania, zamiast je zastapic — inaczej "--wariant B" kasowalby
@@ -405,6 +485,13 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
     stara = pd.read_csv(sciezka).fillna({"szacunek": ""})
     stara = stara[~stara["wariant"].isin(tabela["wariant"])]
     tabela = pd.concat([stara, tabela], ignore_index=True)
+  tabela = tabela.reindex(
+      columns=kolejnosc + [k for k in tabela.columns if k not in kolejnosc])
+  # Int64 (z wielka litera) dopuszcza braki, wiec wariant policzony bez
+  # budynkow zostaje pusty zamiast zamieniac cala kolumne na 225.0.
+  for kolumna in (BUDYNKI, BUDYNKI_MIESZKALNE):
+    if kolumna in tabela:
+      tabela[kolumna] = tabela[kolumna].astype("Int64")
   tabela = tabela.sort_values("wariant").reset_index(drop=True)
   tabela.to_csv(sciezka, index=False)
   zapisz_liste_rozbiorek()
@@ -505,7 +592,9 @@ def sprawdz_adres(zapytanie, postep=print):
 
   korytarze = {}
   for wariant in consts.VARIANTS:
-    warstwy = gpd.read_file("{}/wariant-{}-slad.gpkg".format(KATALOG_WYNIKOW, wariant))
+    warstwy = gpd.read_file(
+        "{}/wariant-{}-slad.gpkg".format(KATALOG_WYNIKOW, wariant),
+        layer=WARSTWA_KORYTARZ)
     powierzchnia = warstwy[warstwy["rodzaj"] == "powierzchnia"]
     korytarze[wariant] = (
         shapely.union_all(warstwy.geometry.values),

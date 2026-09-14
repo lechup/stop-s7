@@ -57,7 +57,7 @@ def korytarz():
     sciezka = "{}/wariant-{}-slad.gpkg".format(KATALOG_SLADOW, wariant)
     if not os.path.exists(sciezka):
       continue
-    warstwy = gpd.read_file(sciezka)
+    warstwy = gpd.read_file(sciezka, layer="korytarz")
     slady.append(shapely.union_all(warstwy.geometry.values))
   if not slady:
     raise SystemExit(

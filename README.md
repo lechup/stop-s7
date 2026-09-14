@@ -93,7 +93,44 @@ W katalogu `raporty/`:
 | `rozbiorka.md` | listy adresów do rozbiórki, pogrupowane po miejscowościach |
 | `wariant-X-rozbiorka.csv` | te same adresy w formie tabelarycznej |
 | `wariant-X-adresy.csv` | wszystkie adresy do 200 m: odległość i strefa |
-| `wariant-X-slad.gpkg` | geometria korytarza (warstwy `powierzchnia` i `tunel`) do QGIS |
+| `wariant-X-slad.gpkg` | do QGIS: warstwy `korytarz`, `budynki` i `adresy` |
+
+### Adresy a budynki — dwie różne miary
+
+Podsumowanie podaje obok siebie liczby liczone **z punktów adresowych PRG**
+i **z obrysów budynków EGiB**. To nie jest ta sama wielkość policzona dwa razy,
+tylko dwie niezależne miary, i nie należy ich mylić:
+
+- punkt adresowy to jedna współrzędna — jeden budynek może mieć kilka adresów
+  albo nie mieć żadnego (garaże, stodoły, budynki gospodarcze),
+- obrys budynku to rzeczywisty kształt — budynek stojący w śladzie połową
+  liczy się jako trafiony, bo pas zajęcia terenu i tak go obejmuje,
+- EGiB liczy wszystko, co stoi, dlatego obok kolumny `budynki` jest
+  `budynki mieszkalne` (`RODZAJ = 'm'`), i to ona jest porównywalna
+  z liczbą adresów.
+
+Skala rozbieżności dla śladu z pasem nad tunelem:
+
+| wariant | adresy „do rozbiórki" | budynki | budynki mieszkalne |
+|---|---|---|---|
+| A | 116 | 225 | 132 |
+| B | 110 | 197 | 117 |
+| C | 150 | 266 | 160 |
+| D | 69 | 144 | 78 |
+| E | 61 | 123 | 74 |
+| F | 115 | 216 | 130 |
+
+Dwukrotna różnica w kolumnie `budynki` to w większości zabudowa gospodarcza.
+Po zawężeniu do mieszkalnych zostaje kilkanaście procent w górę względem
+liczby adresów.
+
+Pokrycie obu zbiorów nie jest pełne: w korytarzu wariantu A **76%** punktów
+adresowych leży wewnątrz jakiegoś obrysu z EGiB (w samym śladzie 70%).
+Pozostałe to punkty postawione obok budynku, działki z adresem bez zabudowy
+albo braki w ewidencji — raport tego nie rozstrzyga.
+
+Budynki są **opcjonalne**: jeśli `budynki/budynki.gpkg` nie ma, raport liczy się
+jak dotąd, tylko bez kolumn budynkowych.
 
 ## Sprawdzanie pojedynczego adresu
 
