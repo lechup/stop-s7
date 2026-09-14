@@ -172,6 +172,16 @@ def zloz(pliki, obszar):
       pd.concat(kawalki, ignore_index=True), crs=kawalki[0].crs)
   przed = len(budynki)
 
+  # Usluga zapisuje braki jako literal "None" — zamieniamy na prawdziwy brak,
+  # inaczej napis wedruje dalej do raportow i podpisow na mapie.
+  # Bez sprawdzania dtype: pyogrio zwraca kolumny tekstowe jako "str",
+  # a nie "object", wiec warunek na object cicho by je pominal.
+  for kolumna in budynki.columns:
+    if kolumna == "geometry":
+      continue
+    kol = budynki[kolumna]
+    budynki[kolumna] = kol.where(kol.astype(str) != "None", None)
+
   # ID_BUDYNKU i gml_id bywaja doslownie "None", wiec kluczem jest geometria.
   budynki = budynki[budynki.geometry.notna() & ~budynki.geometry.is_empty]
   budynki = budynki.loc[~budynki.geometry.apply(lambda g: g.wkb).duplicated()]

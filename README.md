@@ -164,6 +164,13 @@ Bez tego podziału szkoła i stodoła liczą się tak samo, dlatego obok
 
 Pełne oznaczenia:
 [infografika GUGiK](https://www.gov.pl/web/zagospodarowanieprzestrzenne/infografika-oznaczenia-budynkow-egib-opis).
+Mapa rozwija te skróty w dymkach — sama litera nic nie mówi. Kody spoza
+klasyfikacji (w danych zdarza się `x`) pokazywane są wprost, bez zgadywania.
+
+Uwaga dla pracujących na surowych danych: usługa WFS zapisuje braki jako
+**literał `"None"`**, a nie pustą wartość. Dotyczy to zwłaszcza liczby
+kondygnacji (ok. 3,3 tys. rekordów). `pobierz_budynki.py` zamienia je na
+prawdziwe braki przy wczytaniu.
 
 Obie kategorie liczone są w tej samej siatce stref co reszta. Rozkład:
 

@@ -88,8 +88,10 @@ def warstwy_wariantu(wariant):
     for obiekt in dane["features"]:
       obiekt["geometry"]["coordinates"] = zaokraglij(
           obiekt["geometry"]["coordinates"])
+      # Usluga WFS EGiB zapisuje braki jako LITERAL "None", nie jako pusta
+      # wartosc — bez tego w popupie wychodzi "kondygnacje: None nadziemne".
       wlasciwosci = {k: v for k, v in obiekt["properties"].items()
-                     if v is not None and v != ""}
+                     if v is not None and v != "" and v != "None"}
       wlasciwosci["warstwa"] = warstwa
       obiekt["properties"] = wlasciwosci
     obiekty.extend(dane["features"])

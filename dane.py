@@ -16,7 +16,7 @@ DATA_TAG = "v2026.09"
 ARCHIVES = {
     "warianty.tar.gz": ("warianty", "a85a5997c6e42ad5c972232c67b8a231a8cb6835b24ce9e0b217a4d9d3ec9a2c"),
     "wojewodztwa-adresy.tar.gz": ("wojewodztwa-adresy", "3edbe7ed303c09d98a3b282db0461ffd3bcbe13ddfedac3ad1f014166aceb21b"),
-    "budynki.tar.gz": ("budynki", "20b0cca72a98f1412cf1595319fe234b362dd563b9052c2e69818e8a77820c27"),
+    "budynki.tar.gz": ("budynki", "e6bfcd39d159bcdcafc15887ba25133319355017f0337d1a78d99e492b0d21fb"),
 }
 
 DOWNLOAD_URL = "https://github.com/{repo}/releases/download/{tag}/{name}"

@@ -120,6 +120,29 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const WARIANTY = ["A", "B", "C", "D", "E", "F"];
+
+// Rodzaj budynku wg KŚT w EGiB (atrybut EGB_RodzajWgKST). Rozwijamy w popupie,
+// bo sama litera nic nie mówi — a różnica między szkołą a stodołą jest tu
+// istotna. Kody spoza listy (zdarza się "x") pokazujemy wprost, zamiast
+// udawać, że wiemy, co znaczą.
+// https://www.gov.pl/web/zagospodarowanieprzestrzenne/infografika-oznaczenia-budynkow-egib-opis
+const RODZAJE = {
+  m: "mieszkalny",
+  g: "produkcyjny, usługowy lub gospodarczy",
+  t: "transportu i łączności",
+  k: "oświaty, nauki i kultury lub sportowy",
+  z: "szpital lub inny budynek opieki zdrowotnej",
+  b: "biurowy",
+  h: "handlowo-usługowy",
+  p: "przemysłowy",
+  s: "zbiornik, silos lub magazyn",
+  i: "niemieszkalny (inny)"
+};
+
+function opisRodzaju(kod) {
+  if (!kod) return "rodzaj nieznany";
+  return RODZAJE[kod] || ("nieopisany kod „" + kod + "”");
+}
 const BARWY = ["#8a8a8a", "var(--slad)", "var(--tunel)", "#f5c211", "#99c1f1", "#62a0ea", "#b5cee4"];
 const BARWY_HEX = ["#8a8a8a", "#c01c28", "#e66100", "#f5c211", "#99c1f1", "#62a0ea", "#b5cee4"];
 
@@ -241,14 +264,28 @@ function opisObiektu(p) {
            "</strong><br>wariant " + wariantAktywny;
   }
   if (p.warstwa === "budynki") {
-    const kond = p.KONDYGNACJE_NADZIEMNE ? p.KONDYGNACJE_NADZIEMNE + " kond." : "";
-    return "<strong>Budynek</strong><br>rodzaj: " + (p.RODZAJ || "—") +
-           (kond ? "<br>" + kond : "") + "<br>" + (p.strefa || "");
+    const wiersze = ["<strong>Budynek " + opisRodzaju(p.RODZAJ) + "</strong>"];
+    const kond = [];
+    // Liczby przychodza jako tekst, a "0" jest w JS prawdziwe — stad jawne
+    // porownanie, zeby nie wypisywac "0 podziemne".
+    if (Number(p.KONDYGNACJE_NADZIEMNE) > 0)
+      kond.push(p.KONDYGNACJE_NADZIEMNE + " nadziemne");
+    if (Number(p.KONDYGNACJE_PODZIEMNE) > 0)
+      kond.push(p.KONDYGNACJE_PODZIEMNE + " podziemne");
+    if (kond.length) wiersze.push("kondygnacje: " + kond.join(", "));
+    wiersze.push(p.strefa === "w śladzie" || p.strefa === "nad tunelem"
+      ? "<strong>" + p.strefa + "</strong>"
+      : (p.strefa || "") + (p.odleglosc_m != null ? " (" + p.odleglosc_m + " m)" : ""));
+    wiersze.push('<span class="uwaga">EGiB, wariant ' + wariantAktywny + "</span>");
+    return wiersze.join("<br>");
   }
   const ulica = [p.NAZWA_ULC, p.NUMER_PORZ].filter(Boolean).join(" ");
+  const strefa = p.strefa === "w śladzie" || p.strefa === "nad tunelem"
+    ? "<strong>" + p.strefa + "</strong>"
+    : (p.strefa || "") + " (" + (p.odleglosc_m ?? "?") + " m)";
   return "<strong>" + (ulica || p.NUMER_PORZ || "adres") + "</strong><br>" +
-         [p.KOD_POCZT, p.NAZWA_MSC].filter(Boolean).join(" ") +
-         "<br>" + (p.strefa || "") + ", " + (p.odleglosc_m ?? "?") + " m";
+         [p.KOD_POCZT, p.NAZWA_MSC].filter(Boolean).join(" ") + "<br>" + strefa +
+         '<br><span class="uwaga">PRG, wariant ' + wariantAktywny + "</span>";
 }
 
 async function pokazWariant(wariant) {
