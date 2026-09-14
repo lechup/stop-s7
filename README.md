@@ -304,12 +304,22 @@ danych identyfikujących i według dokumentacji nie wymaga banera zgody — a pr
 stronie, na którą ludzie wchodzą sprawdzić, czy stracą dom, wysyłanie ich ruchu
 do Google byłoby kiepskim pomysłem.
 
-Poza odsłonami liczone są dwa zdarzenia:
+Poza odsłonami liczone są zdarzenia:
 
 | zdarzenie | kiedy |
 |---|---|
-| `sprawdzenie-adresu` | ktoś kliknął wynik wyszukiwania — czyli faktycznie sprawdził swój adres, a nie tylko wpisał literę |
-| `wariant-X` | ktoś świadomie przełączył wariant (wczytanie strony się nie liczy) |
+| `wyszukiwanie` | zapytanie zwróciło trafienia |
+| `wyszukiwanie-bez-wyniku` | zapytanie nic nie znalazło — dużo takich znaczy, że promień indeksu (500 m) jest za mały albo ludzie pytają spoza obszaru |
+| `sprawdzenie-adresu` | ktoś kliknął wynik, czyli faktycznie sprawdził swój adres |
+| `wariant-X` | świadome przełączenie wariantu (wczytanie strony się nie liczy) |
+| `filtr-strefy` | zawężenie strefami |
+| `filtr-rodzaje` | zawężenie rodzajem budynku |
+| `filtr-warstwy` | przełączenie warstwy |
+
+Zdarzenia zawężania i wyszukiwania są **zbiorcze**: ktoś odklikujący siedem
+rodzajów budynków wykonuje jedną czynność, a nie siedem, i tak też się liczy.
+Wpisanie „Osterwy" znak po znaku daje jedno zdarzenie, nie siedem — inaczej
+statystyki mówiłyby więcej o zwinności palca niż o zachowaniu.
 
 **Wysyłana jest wyłącznie nazwa zdarzenia.** Szukana fraza nigdy nie opuszcza
 przeglądarki — to, czego ktoś szuka, jest informacją o tym, gdzie mieszka.

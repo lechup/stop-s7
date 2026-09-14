@@ -155,6 +155,16 @@ function zdarzenie(nazwa, opis) {
   }
 }
 
+// Zdarzenia zbiorcze. Ktos odklikujacy siedem rodzajow budynkow wykonuje JEDNA
+// czynnosc "zawezil wyniki", a nie siedem — bez opoznienia statystyki mowilyby
+// wiecej o zwinnosci palca niz o zachowaniu. Tak samo wpisywanie w wyszukiwarke:
+// liczymy zapytanie, nie kazde nacisniecie klawisza.
+const _opoznione = {};
+function zdarzenieZbiorcze(nazwa, opis, ms) {
+  clearTimeout(_opoznione[nazwa]);
+  _opoznione[nazwa] = setTimeout(() => zdarzenie(nazwa, opis), ms || 1200);
+}
+
 const WARIANTY = ["A", "B", "C", "D", "E", "F"];
 
 // Rodzaj budynku wg KŚT w EGiB (atrybut EGB_RodzajWgKST). Rozwijamy w popupie,
@@ -321,6 +331,7 @@ function zbudujWyborTypu() {
       odswiezTypy();
       odswiezLiczby();
       odswiezPodsumowanieRodzajow(policzRodzaje());
+      zdarzenieZbiorcze("filtr-rodzaje", "Zawężenie rodzajem budynku");
     });
     lista.appendChild(etykieta);
   }
@@ -335,6 +346,7 @@ function ustawRodzaje(wszystkie) {
   odswiezTypy();
   odswiezLiczby();
   odswiezPodsumowanieRodzajow(policzRodzaje());
+  zdarzenieZbiorcze("filtr-rodzaje", "Zawężenie rodzajem budynku");
 }
 
 // Liczby przy przelacznikach: ile obiektow jest w kazdej strefie i ile widac
@@ -563,6 +575,11 @@ async function szukaj(zapytanie) {
     return true;
   }).slice(0, 40);
 
+  // Rozroznienie ma sens praktyczny: duzo pustych wyszukiwan znaczy, ze promien
+  // indeksu jest za maly albo ludzie wpisuja adresy spoza obszaru.
+  zdarzenieZbiorcze(trafienia.length ? "wyszukiwanie" : "wyszukiwanie-bez-wyniku",
+                    trafienia.length ? "Wyszukiwanie" : "Wyszukiwanie bez wyniku");
+
   if (!trafienia.length) {
     pojemnik.innerHTML = '<p class="info">Nic nie pasuje. Indeks obejmuje adresy do ' +
       indeks.promien + ' m od któregokolwiek wariantu — jeśli Twojego tu nie ma, ' +
@@ -614,6 +631,7 @@ STREFY_NAZWY.forEach((strefa, i) => {
     '<td class="liczba" data-liczba="budynki">–</td>';
   wiersz.querySelector("input").addEventListener("change", () => {
     odswiezStrefy(); odswiezLiczby();
+    zdarzenieZbiorcze("filtr-strefy", "Zawężenie strefami");
   });
   pojemnikStref.appendChild(wiersz);
 });
@@ -624,6 +642,7 @@ function ustawStrefy(wlaczone) {
   });
   odswiezStrefy();
   odswiezLiczby();
+  zdarzenieZbiorcze("filtr-strefy", "Zawężenie strefami");
 }
 document.getElementById("tylko-slad").addEventListener("click", e => {
   e.preventDefault(); ustawStrefy("slad");
@@ -644,6 +663,7 @@ document.querySelectorAll("[data-warstwa]").forEach(pole => {
     const warstwa = warstwyMapy[pole.dataset.warstwa];
     if (pole.checked) mapa.addLayer(warstwa); else mapa.removeLayer(warstwa);
     odswiezLiczby();
+    zdarzenieZbiorcze("filtr-warstwy", "Przełączenie warstwy");
   });
 });
 
