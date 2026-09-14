@@ -155,6 +155,50 @@ Skrypt korzysta tylko z biblioteki standardowej, więc można go uruchomić
 przed instalacją zależności. Sprawdza sumy sha256, a przy niezgodności
 przerywa i kasuje pobrany plik.
 
+### Obrysy budynków (EGiB)
+
+Punkt adresowy PRG to współrzędna, a nie obrys budynku — dom może stać kilka
+metrów od punktu. Obrysy z **Ewidencji Gruntów i Budynków** pozwalają liczyć
+trafienia po rzeczywistym kształcie budynku.
+
+Pobiera je [pobierz_budynki.py](pobierz_budynki.py) ze zbiorczej usługi WFS
+prowadzonej przez GUGiK:
+
+<https://mapy.geoportal.gov.pl/wss/service/PZGIK/EGIB/WFS/UslugaZbiorcza>
+
+Usługa agreguje dane z 385 powiatowych usług WFS — EGiB prowadzą starostwa —
+i odświeżana jest w cyklu codziennym. Dane EGiB co do zasady są płatne, ale
+geometria działek i budynków wraz z podstawowymi atrybutami jest **bezpłatna
+i do dowolnego wykorzystania**; tylko z tego korzystamy (obrys, `RODZAJ`, liczba
+kondygnacji). Specyfikację usługi określa rozporządzenie Ministra Rozwoju, Pracy
+i Technologii z 27 lipca 2021 r. w sprawie ewidencji gruntów i budynków.
+
+```bash
+.venv/bin/python pobierz_budynki.py
+```
+
+Zakres pobierania to wspólny korytarz wszystkich wariantów poszerzony o 200 m
+(49 km²) — dokładnie tyle, ile potrzeba do wypełnienia całej tabeli wyników.
+Odpytujemy prostokątem opisanym na tym obszarze, bo filtr WFS ma być krótki
+i prosty, a do właściwego kształtu przycinamy już lokalnie. Wynik to
+`budynki/budynki.gpkg` — 8 971 budynków, 2,9 MB.
+
+Dwie rzeczy, o które przy tej usłudze łatwo się potknąć:
+
+- **Kolejność osi.** Przy `srsName="urn:ogc:def:crs:EPSG::2180"` współrzędne idą
+  jako `northing easting`, odwrotnie niż podaje GeoPandas. Zamiana miejscami nie
+  kończy się błędem ani pustką — serwer zwraca komplet budynków, tylko z innego
+  miejsca w Polsce. Skrypt po pobraniu sprawdza, czy geometria wpada w korytarz.
+- **Limit 1000 obiektów na żądanie** jest twardy: przy `count=5000` serwer i tak
+  zwraca 1000. Kolejne strony bierze się przez `startindex` — bez tego pobiera
+  się w kółko tę samą stronę.
+
+Jedna gmina (TERYT `120907`) zwraca każdy budynek ok. 120 razy: 13 673 wiersze
+na 114 rzeczywistych budynków. To usterka jej powiatowej usługi, którą usługa
+zbiorcza przepuszcza dalej. Skrypt odsiewa powtórzenia po geometrii, bo
+`ID_BUDYNKU` i `gml_id` bywają dosłownie `None` i na klucz się nie nadają.
+Żaden budynek tej gminy nie leży w korytarzu, więc wyników to nie dotyka.
+
 ### Rozpoznawanie pliku adresowego
 
 Skrypt nie polega na nazwie pliku, tylko szuka pod `wojewodztwa-adresy/`
@@ -223,3 +267,4 @@ się pomylić, które wyniki pochodzą z których danych.
 - [warstwy.md](warstwy.md) — inwentarz warstw w plikach GML i kalibracja
 - [dane.py](dane.py) — konfiguracja paczek z danymi (tag release'a, sumy kontrolne)
 - [pobierz_dane.py](pobierz_dane.py) — pobieranie danych wejściowych
+- [pobierz_budynki.py](pobierz_budynki.py) — pobieranie obrysów budynków z EGiB
