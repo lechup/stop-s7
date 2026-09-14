@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S7 — warianty przebiegu a zabudowa</title>
+<meta name="description" content="Które domy leżą w śladzie planowanej S7 — mapa wariantów A–F i wyszukiwarka adresu.">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root {
+    --tlo: #f7f7f5; --panel: #fff; --tekst: #1a1a1a; --przygasly: #5f6368;
+    --ramka: #d8d8d4; --akcent: #1a5fb4;
+    --slad: #c01c28; --tunel: #e66100; --s20: #f5c211; --s30: #99c1f1;
+    --s50: #62a0ea; --s200: #b5cee4;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         color: var(--tekst); background: var(--tlo); }
+  #uklad { display: flex; height: 100vh; }
+  #panel { width: 340px; flex: none; background: var(--panel); overflow-y: auto;
+           border-right: 1px solid var(--ramka); }
+  #mapa { flex: 1; }
+  .sekcja { padding: 14px 16px; border-bottom: 1px solid var(--ramka); }
+  h1 { font-size: 17px; margin: 0 0 4px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em;
+       color: var(--przygasly); margin: 0 0 8px; font-weight: 600; }
+  p.info { margin: 0; font-size: 13px; color: var(--przygasly); }
+  .warianty { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .warianty button { padding: 9px 0; font-size: 15px; font-weight: 600; cursor: pointer;
+                     border: 1px solid var(--ramka); background: #fff; border-radius: 6px; }
+  .warianty button[aria-pressed="true"] { background: var(--akcent); color: #fff;
+                                          border-color: var(--akcent); }
+  label.przelacznik { display: flex; align-items: center; gap: 8px; padding: 3px 0;
+                      font-size: 14px; cursor: pointer; }
+  #szukaj { width: 100%; padding: 9px 10px; font-size: 14px; border: 1px solid var(--ramka);
+            border-radius: 6px; }
+  #wyniki { margin-top: 8px; }
+  .trafienie { padding: 7px 8px; border: 1px solid var(--ramka); border-radius: 6px;
+               margin-bottom: 6px; cursor: pointer; background: #fff; font-size: 14px; }
+  .trafienie:hover { border-color: var(--akcent); }
+  table.strefy { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  table.strefy th, table.strefy td { padding: 4px 6px; text-align: left;
+                                     border-bottom: 1px solid var(--ramka); }
+  table.strefy td.odl { text-align: right; font-variant-numeric: tabular-nums; }
+  .znacznik { display: inline-block; width: 11px; height: 11px; border-radius: 2px;
+              margin-right: 6px; vertical-align: -1px; }
+  .legenda div { font-size: 13px; padding: 2px 0; }
+  .uwaga { font-size: 12px; color: var(--przygasly); }
+  .szacunek { font-size: 11px; background: #fde; color: #91004a; padding: 1px 5px;
+              border-radius: 3px; margin-left: 4px; }
+  #przelacz-panel { display: none; }
+  @media (max-width: 820px) {
+    #uklad { flex-direction: column; }
+    #panel { width: auto; max-height: 52vh; border-right: none;
+             border-bottom: 1px solid var(--ramka); }
+    #mapa { min-height: 48vh; }
+  }
+</style>
+</head>
+<body>
+<div id="uklad">
+  <div id="panel">
+    <div class="sekcja">
+      <h1>S7 — warianty a zabudowa</h1>
+      <p class="info">Który wariant przechodzi przez czyje domy. Dane: materiały
+      konsultacji społecznych, punkty adresowe PRG i obrysy budynków EGiB.</p>
+    </div>
+
+    <div class="sekcja">
+      <h2>Sprawdź adres</h2>
+      <input id="szukaj" type="search" placeholder="np. Osterwy 41P albo Golkowice 116"
+             autocomplete="off" aria-label="Szukaj adresu">
+      <div id="wyniki"></div>
+    </div>
+
+    <div class="sekcja">
+      <h2>Wariant</h2>
+      <div class="warianty" id="warianty"></div>
+      <p class="info" id="opis-wariantu" style="margin-top:8px"></p>
+    </div>
+
+    <div class="sekcja">
+      <h2>Warstwy</h2>
+      <label class="przelacznik"><input type="checkbox" data-warstwa="korytarz" checked> ślad drogi</label>
+      <label class="przelacznik"><input type="checkbox" data-warstwa="budynki" checked> budynki (EGiB)</label>
+      <label class="przelacznik"><input type="checkbox" data-warstwa="adresy" checked> adresy (PRG)</label>
+    </div>
+
+    <div class="sekcja legenda">
+      <h2>Legenda</h2>
+      <div><span class="znacznik" style="background:var(--slad)"></span>ślad drogi / w śladzie</div>
+      <div><span class="znacznik" style="background:var(--tunel)"></span>pas nad tunelem</div>
+      <div><span class="znacznik" style="background:var(--s20)"></span>0–20 m</div>
+      <div><span class="znacznik" style="background:var(--s30)"></span>20–30 m</div>
+      <div><span class="znacznik" style="background:var(--s50)"></span>30–50 m</div>
+      <div><span class="znacznik" style="background:var(--s200)"></span>50–200 m</div>
+    </div>
+
+    <div class="sekcja">
+      <p class="uwaga"><strong>To wyliczenie, nie oficjalna lista wywłaszczeń.</strong>
+      Ślad drogi odtworzono z linii krawędzi jezdni i skarp — obrys zajęcia terenu
+      nie został opublikowany. Punkt adresowy to współrzędna, a nie obrys budynku.
+      Wariant B jest szacunkiem (brak warstw skarp w materiałach). Kategoria
+      „nad tunelem” zakłada budowę odkrywkową, czego materiały nie rozstrzygają.
+      Metoda i kontrole:
+      <a href="https://github.com/lechup/stop-s7">github.com/lechup/stop-s7</a>.</p>
+    </div>
+  </div>
+  <div id="mapa"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const WARIANTY = ["A", "B", "C", "D", "E", "F"];
+const BARWY = ["#8a8a8a", "var(--slad)", "var(--tunel)", "#f5c211", "#99c1f1", "#62a0ea", "#b5cee4"];
+const BARWY_HEX = ["#8a8a8a", "#c01c28", "#e66100", "#f5c211", "#99c1f1", "#62a0ea", "#b5cee4"];
+
+let wariantAktywny = "A";
+const wczytane = {};        // wariant -> GeoJSON
+const warstwyMapy = {};     // nazwa warstwy -> L.LayerGroup
+let indeks = null;          // leniwie wczytywany indeks adresow
+let indeksWczytywany = null;
+
+// Widok w adresie URL: #A/15/49.9512/19.9321 — zeby dalo sie podeslac komus
+// link prosto na swoja ulice.
+function zStanuUrl() {
+  const m = /^#([A-F])\/(\d+(?:\.\d+)?)\/(-?\d+\.?\d*)\/(-?\d+\.?\d*)$/
+    .exec(location.hash);
+  if (!m) return null;
+  return { wariant: m[1], zoom: parseFloat(m[2]),
+           srodek: [parseFloat(m[3]), parseFloat(m[4])] };
+}
+const stanStartowy = zStanuUrl();
+
+const mapa = L.map("mapa", { zoomControl: true }).setView(
+  stanStartowy ? stanStartowy.srodek : [49.95, 19.93],
+  stanStartowy ? stanStartowy.zoom : 11);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+}).addTo(mapa);
+
+for (const nazwa of ["korytarz", "budynki", "adresy"]) {
+  warstwyMapy[nazwa] = L.layerGroup().addTo(mapa);
+}
+const znacznikSzukania = L.layerGroup().addTo(mapa);
+
+function etykietaStrefy(kod, progi) {
+  if (kod === 0) return "poza " + progi[progi.length - 1] + " m";
+  if (kod === 1) return "w śladzie";
+  if (kod === 2) return "nad tunelem";
+  const i = kod - 3;
+  const od = i === 0 ? 0 : progi[i - 1];
+  return od + "–" + progi[i] + " m";
+}
+
+function kodStrefyZNazwy(nazwa) {
+  if (nazwa === "w śladzie") return 1;
+  if (nazwa === "nad tunelem") return 2;
+  const m = /^(\d+)-(\d+)/.exec(nazwa || "");
+  if (!m) return 0;
+  return 3 + ["20", "30", "50", "200"].indexOf(m[2]);
+}
+
+function promienPunktu() {
+  // Przy oddaleniu setki punktow zlewaly sie w plame zaslaniajaca trase.
+  const z = mapa.getZoom();
+  return z >= 16 ? 6 : z >= 14 ? 4.5 : z >= 12 ? 3 : 2;
+}
+
+function stylObiektu(obiekt) {
+  const p = obiekt.properties;
+  if (p.warstwa === "korytarz") {
+    const tunel = p.rodzaj === "tunel";
+    // Slad ma ok. 50 m szerokosci, czyli przy oddaleniu mniej niz piksel —
+    // bez wyraznego obrysu trasa znika pod punktami adresowymi.
+    return { color: tunel ? BARWY_HEX[2] : BARWY_HEX[1], weight: 2.5,
+             opacity: 0.95, fillColor: tunel ? BARWY_HEX[2] : BARWY_HEX[1],
+             fillOpacity: 0.35 };
+  }
+  if (p.warstwa === "budynki") {
+    const kod = kodStrefyZNazwy(p.strefa);
+    return { color: "#333", weight: 0.8, fillColor: BARWY_HEX[kod] || "#666", fillOpacity: 0.85 };
+  }
+  return {};
+}
+
+function opisObiektu(p) {
+  if (p.warstwa === "korytarz") {
+    return "<strong>" + (p.rodzaj === "tunel" ? "Pas nad tunelem" : "Ślad drogi") +
+           "</strong><br>wariant " + wariantAktywny;
+  }
+  if (p.warstwa === "budynki") {
+    const kond = p.KONDYGNACJE_NADZIEMNE ? p.KONDYGNACJE_NADZIEMNE + " kond." : "";
+    return "<strong>Budynek</strong><br>rodzaj: " + (p.RODZAJ || "—") +
+           (kond ? "<br>" + kond : "") + "<br>" + (p.strefa || "");
+  }
+  const ulica = [p.NAZWA_ULC, p.NUMER_PORZ].filter(Boolean).join(" ");
+  return "<strong>" + (ulica || p.NUMER_PORZ || "adres") + "</strong><br>" +
+         [p.KOD_POCZT, p.NAZWA_MSC].filter(Boolean).join(" ") +
+         "<br>" + (p.strefa || "") + ", " + (p.odleglosc_m ?? "?") + " m";
+}
+
+async function pokazWariant(wariant) {
+  wariantAktywny = wariant;
+  document.querySelectorAll("#warianty button").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.textContent === wariant)));
+
+  if (!wczytane[wariant]) {
+    const odpowiedz = await fetch("dane/wariant-" + wariant + ".geojson");
+    if (!odpowiedz.ok) { alert("Nie udało się wczytać danych wariantu " + wariant); return; }
+    wczytane[wariant] = await odpowiedz.json();
+  }
+  const dane = wczytane[wariant];
+  Object.values(warstwyMapy).forEach(w => w.clearLayers());
+
+  L.geoJSON(dane, {
+    style: stylObiektu,
+    pointToLayer: (obiekt, latlng) => L.circleMarker(latlng, {
+      radius: promienPunktu(), weight: 1, color: "#222",
+      fillColor: BARWY_HEX[kodStrefyZNazwy(obiekt.properties.strefa)] || "#666",
+      fillOpacity: 0.9
+    }),
+    onEachFeature: (obiekt, warstwa) => {
+      warstwa.bindPopup(opisObiektu(obiekt.properties));
+      warstwyMapy[obiekt.properties.warstwa].addLayer(warstwa);
+      if (obiekt.properties.warstwa === "korytarz" && warstwa.bringToBack) {
+        warstwa.bringToBack();
+      }
+    }
+  });
+
+  const granice = L.geoJSON(dane).getBounds();
+  if (granice.isValid() && !mapa.__dopasowano && !stanStartowy) {
+    mapa.fitBounds(granice, { padding: [20, 20] });
+    mapa.__dopasowano = true;
+  }
+  odswiezOpis();
+  zapiszStanUrl();
+}
+
+function odswiezOpis() {
+  const element = document.getElementById("opis-wariantu");
+  if (!indeks) { element.textContent = ""; return; }
+  const i = WARIANTY.indexOf(wariantAktywny);
+  element.innerHTML = indeks.szacunek[i]
+    ? "Wariant B liczony jest szacunkowo — materiały nie zawierają dla niego warstw skarp."
+    : "";
+}
+
+async function wczytajIndeks() {
+  if (indeks) return indeks;
+  if (!indeksWczytywany) {
+    indeksWczytywany = fetch("dane/adresy-index.json")
+      .then(r => r.json()).then(d => { indeks = d; odswiezOpis(); return d; });
+  }
+  return indeksWczytywany;
+}
+
+function tabelaDlaAdresu(wiersz) {
+  const progi = indeks.progi;
+  let html = '<table class="strefy"><tr><th>wariant</th><th class="odl">odległość</th><th>strefa</th></tr>';
+  wiersz[6].forEach((para, i) => {
+    const [odleglosc, kod] = para;
+    html += "<tr><td>" + WARIANTY[i] +
+      (indeks.szacunek[i] ? '<span class="szacunek">szacunek</span>' : "") +
+      '</td><td class="odl">' + odleglosc + " m</td><td>" +
+      '<span class="znacznik" style="background:' + (BARWY_HEX[kod] || "#999") + '"></span>' +
+      etykietaStrefy(kod, progi) + "</td></tr>";
+  });
+  return html + "</table>";
+}
+
+let czasomierz = null;
+document.getElementById("szukaj").addEventListener("input", (zdarzenie) => {
+  clearTimeout(czasomierz);
+  czasomierz = setTimeout(() => szukaj(zdarzenie.target.value.trim()), 180);
+});
+
+async function szukaj(zapytanie) {
+  const pojemnik = document.getElementById("wyniki");
+  if (zapytanie.length < 3) { pojemnik.innerHTML = ""; return; }
+  pojemnik.innerHTML = '<p class="info">Szukam…</p>';
+  await wczytajIndeks();
+
+  const czesci = zapytanie.toLowerCase().split(/\s+/);
+  const numer = /^\d/.test(czesci[czesci.length - 1]) ? czesci.pop() : null;
+  const nazwa = czesci.join(" ");
+
+  const trafienia = indeks.adresy.filter(w => {
+    const wUlicy = (w[0] + " " + w[2]).toLowerCase();
+    if (nazwa && !wUlicy.includes(nazwa)) return false;
+    if (numer && String(w[1]).toLowerCase() !== numer) return false;
+    return true;
+  }).slice(0, 40);
+
+  if (!trafienia.length) {
+    pojemnik.innerHTML = '<p class="info">Nic nie pasuje. Indeks obejmuje adresy do ' +
+      indeks.promien + ' m od któregokolwiek wariantu — jeśli Twojego tu nie ma, ' +
+      'leży dalej niż ' + indeks.promien + ' m od wszystkich.</p>';
+    return;
+  }
+
+  pojemnik.innerHTML = "";
+  trafienia.forEach(w => {
+    const element = document.createElement("div");
+    element.className = "trafienie";
+    const tytul = [w[0], w[1]].filter(Boolean).join(" ") || w[1];
+    element.innerHTML = "<strong>" + tytul + "</strong><br>" +
+      '<span class="info">' + [w[3], w[2]].filter(Boolean).join(" ") + "</span>";
+    element.addEventListener("click", () => {
+      document.querySelectorAll(".trafienie .strefy").forEach(t => t.remove());
+      element.insertAdjacentHTML("beforeend", tabelaDlaAdresu(w));
+      znacznikSzukania.clearLayers();
+      L.circleMarker([w[5], w[4]], { radius: 9, color: "#1a5fb4", weight: 3,
+        fillColor: "#1a5fb4", fillOpacity: 0.25 }).addTo(znacznikSzukania);
+      mapa.setView([w[5], w[4]], 17);
+    });
+    pojemnik.appendChild(element);
+  });
+}
+
+const pojemnikWariantow = document.getElementById("warianty");
+WARIANTY.forEach(w => {
+  const przycisk = document.createElement("button");
+  przycisk.textContent = w;
+  przycisk.setAttribute("aria-pressed", String(w === wariantAktywny));
+  przycisk.addEventListener("click", () => pokazWariant(w));
+  pojemnikWariantow.appendChild(przycisk);
+});
+
+document.querySelectorAll("[data-warstwa]").forEach(pole => {
+  pole.addEventListener("change", () => {
+    const warstwa = warstwyMapy[pole.dataset.warstwa];
+    if (pole.checked) mapa.addLayer(warstwa); else mapa.removeLayer(warstwa);
+  });
+});
+
+function zapiszStanUrl() {
+  const s = mapa.getCenter();
+  history.replaceState(null, "", "#" + wariantAktywny + "/" + mapa.getZoom() +
+    "/" + s.lat.toFixed(4) + "/" + s.lng.toFixed(4));
+}
+mapa.on("moveend", zapiszStanUrl);
+
+mapa.on("zoomend", () => {
+  const r = promienPunktu();
+  warstwyMapy.adresy.eachLayer(w => { if (w.setRadius) w.setRadius(r); });
+});
+
+pokazWariant(stanStartowy ? stanStartowy.wariant : "A");
+</script>
+</body>
+</html>

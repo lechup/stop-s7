@@ -170,6 +170,49 @@ daje niezależną kontrolę:
 
 Kontrolę odpala `functions.kontrola(wariant)`.
 
+## Mapa online
+
+Statyczna strona z mapą wariantów i wyszukiwarką adresu, wystawiana przez
+GitHub Pages z katalogu [docs/](docs/):
+
+<https://lechup.github.io/stop-s7/>
+
+Wpisanie adresu pokazuje odległość i strefę we wszystkich wariantach naraz —
+to odpowiednik trybu `--adres`, tyle że w przeglądarce. Widok zapisuje się
+w adresie URL (`#C/17/49.9454/19.9742`), więc da się podesłać komuś link
+prosto na jego ulicę.
+
+Dane generuje [eksport_web.py](eksport_web.py):
+
+```bash
+.venv/bin/python eksport_web.py
+```
+
+| plik | zawartość | po gzipie |
+|---|---|---|
+| `docs/dane/wariant-X.geojson` | korytarz, budynki i adresy jednego wariantu | 40–58 kB |
+| `docs/dane/adresy-index.json` | 13 641 adresów z odległością do każdego wariantu | 356 kB |
+
+Całość waży 662 kB po kompresji, więc nie ma po co sięgać po kafelki wektorowe —
+przeglądarka bierze zwykły GeoJSON, a Pages sam serwuje gzip. Indeks wyszukiwarki
+wczytywany jest dopiero przy pierwszym wpisaniu adresu, żeby wejście na stronę
+kosztowało ~60 kB.
+
+Indeks obejmuje adresy do **500 m** od któregokolwiek wariantu, czyli dalej niż
+raportowe 200 m — ktoś mieszkający tuż za granicą strefy dostaje konkretną liczbę
+zamiast „nie znaleziono".
+
+Dwie rzeczy warte uwagi przy zmianach:
+
+- **`allow_nan=False` przy zapisie JSON-a.** Braki w danych to `NaN`, a `NaN`
+  jest w Pythonie logicznie prawdziwy, więc `wartość or ""` go przepuszcza.
+  `json.dump` zapisuje wtedy literał `NaN`, którego `JSON.parse` w przeglądarce
+  **nie przyjmuje** — a Python taki plik czyta bez mrugnięcia, więc błąd
+  przechodzi testy i wysypuje się dopiero u użytkownika.
+- **Kafelki podkładu pochodzą z serwerów OpenStreetMap.** Przy większym ruchu
+  wypada przejść na własny lub płatny serwis kafelków — polityka OSM dopuszcza
+  lekkie użycie, nie ruch z kampanii.
+
 ## Dane wejściowe
 
 Katalogi `warianty/`, `wojewodztwa-adresy/` i `budynki/` nie są trzymane
@@ -352,3 +395,5 @@ się pomylić, które wyniki pochodzą z których danych.
 - [pobierz_dane.py](pobierz_dane.py) — pobieranie danych wejściowych
 - [pobierz_budynki.py](pobierz_budynki.py) — pobieranie obrysów budynków z EGiB
 - [pobierz_prg.py](pobierz_prg.py) — odświeżanie punktów adresowych PRG
+- [eksport_web.py](eksport_web.py) — dane dla mapy online
+- [docs/](docs/) — strona na GitHub Pages
