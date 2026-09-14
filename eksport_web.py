@@ -30,7 +30,8 @@ import functions
 
 KATALOG = "docs/dane"
 # Promien indeksu wyszukiwarki. Wiekszy niz raportowe 200 m, zeby ktos mieszkajacy
-# tuz za granica strefy dostal konkretna liczbe zamiast "nie znaleziono".
+# tuz za granica strefy dostal konkretna liczbe zamiast "nie znaleziono" —
+# komunikatu nieodroznialnego od literowki.
 PROMIEN_INDEKSU = 500
 # Zaokraglenie wspolrzednych: 6 miejsc po przecinku to ok. 0,1 m — ponizej
 # dokladnosci samych danych, a tnie rozmiar plikow o jedna trzecia.

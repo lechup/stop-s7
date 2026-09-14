@@ -294,13 +294,32 @@ def policz(wariant, postep=None):
   return wynik, warstwy, szacowany
 
 
+def _dopisz_strefy(wiersz, przedrostek, strefy):
+  """Komplet kolumn dla jednej miary: strefy rozlaczne, suma dla korytarza
+  i kolumny narastajace. Uzywane osobno dla wszystkich budynkow i dla samych
+  mieszkalnych, zeby obie dalo sie czytac w tej samej siatce co adresy."""
+  liczby = strefy.value_counts() if len(strefy) else {}
+  for nazwa in nazwy_stref():
+    wiersz["{} {}".format(przedrostek, nazwa)] = int(liczby.get(nazwa, 0))
+
+  wiersz[przedrostek] = (wiersz["{} {}".format(przedrostek, W_SLADZIE)]
+                         + wiersz["{} {}".format(przedrostek, NAD_TUNELEM)])
+
+  narastajaco = wiersz[przedrostek]
+  poprzedni = 0
+  for prog in consts.STREFY:
+    narastajaco += wiersz["{} {}-{} m".format(przedrostek, poprzedni, prog)]
+    wiersz["{} ≤{} m".format(przedrostek, prog)] = narastajaco
+    poprzedni = prog
+
+
 def podsumuj(wariant, adresy, szacowany=False, budynki=None):
   """Wiersz podsumowania: strefy rozlaczne + kolumny narastajace.
 
-  Budynki dostaja te sama siatke stref co adresy, zeby obie miary dalo sie
-  zestawiac wprost. To NIEZALEZNE miary, a nie poprawka jedna do drugiej:
-  jeden budynek miewa kilka adresow albo zaden, a EGiB obejmuje takze garaze
-  i budynki gospodarcze — stad osobno "budynki mieszkalne"."""
+  Budynki dostaja te sama siatke stref co adresy — osobno wszystkie, osobno
+  mieszkalne — zeby dalo sie je zestawiac wprost. To NIEZALEZNE miary, a nie
+  poprawka jedna do drugiej: jeden budynek miewa kilka adresow albo zaden,
+  a EGiB obejmuje takze garaze i budynki gospodarcze."""
   wiersz = {"wariant": wariant}
   liczby = adresy["strefa"].value_counts() if len(adresy) else {}
   for nazwa in nazwy_stref():
@@ -316,24 +335,13 @@ def podsumuj(wariant, adresy, szacowany=False, budynki=None):
     poprzedni = prog
 
   if budynki is not None:
-    liczby_b = budynki["strefa"].value_counts() if len(budynki) else {}
-    for nazwa in nazwy_stref():
-      wiersz["{} {}".format(BUDYNKI, nazwa)] = int(liczby_b.get(nazwa, 0))
-
-    wiersz[BUDYNKI] = (wiersz["{} {}".format(BUDYNKI, W_SLADZIE)]
-                       + wiersz["{} {}".format(BUDYNKI, NAD_TUNELEM)])
-    # Mieszkalne tylko dla korytarza — tam, gdzie rozstrzyga sie rozbiorka.
-    w_korytarzu = budynki[budynki["strefa"].isin([W_SLADZIE, NAD_TUNELEM])] \
-        if len(budynki) else budynki
-    wiersz[BUDYNKI_MIESZKALNE] = int(
-        (w_korytarzu["RODZAJ"] == RODZAJ_MIESZKALNY).sum()) if len(w_korytarzu) else 0
-
-    narastajaco = wiersz[BUDYNKI]
-    poprzedni = 0
-    for prog in consts.STREFY:
-      narastajaco += wiersz["{} {}-{} m".format(BUDYNKI, poprzedni, prog)]
-      wiersz["{} ≤{} m".format(BUDYNKI, prog)] = narastajaco
-      poprzedni = prog
+    puste = pd.Series(dtype=object)
+    _dopisz_strefy(wiersz, BUDYNKI,
+                   budynki["strefa"] if len(budynki) else puste)
+    mieszkalne = (budynki[budynki["RODZAJ"] == RODZAJ_MIESZKALNY]
+                  if len(budynki) else budynki)
+    _dopisz_strefy(wiersz, BUDYNKI_MIESZKALNE,
+                   mieszkalne["strefa"] if len(mieszkalne) else puste)
 
   wiersz["szacunek"] = "tak" if szacowany else ""
   return wiersz

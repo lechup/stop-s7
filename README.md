@@ -111,10 +111,14 @@ tylko dwie niezależne miary, i nie należy ich mylić:
 
 Budynki liczone są w **tej samej siatce stref co adresy** — `w śladzie`,
 `nad tunelem`, `0-20 m`, `20-30 m`, `30-50 m`, `50-200 m` plus kolumny
-narastające `≤20 m` … `≤200 m`, wszystkie z przedrostkiem `budynki`. Strefę
-rozstrzyga odległość do najbliższej części korytarza, dokładnie jak przy
-adresach; `budynki mieszkalne` dotyczy samego korytarza, bo tam rozstrzyga się
-rozbiórka.
+narastające `≤20 m` … `≤200 m`. Strefę rozstrzyga odległość do najbliższej
+części korytarza, dokładnie jak przy adresach.
+
+Siatka powtórzona jest **dwa razy**: z przedrostkiem `budynki` dla wszystkich
+obiektów z EGiB i `budynki mieszkalne` dla `RODZAJ = 'm'`. Bez tego rozróżnienia
+liczby w dalszych strefach są mylące — w pasie 50–200 m sporą część stanowią
+stodoły, garaże i budynki gospodarcze, a pytanie brzmi zwykle „ilu ludzi to
+dotyczy”, nie „ile obiektów stoi”.
 
 Skala rozbieżności dla śladu z pasem nad tunelem:
 
