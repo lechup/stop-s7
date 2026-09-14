@@ -86,6 +86,14 @@
       <label class="przelacznik"><input type="checkbox" data-warstwa="adresy" checked> adresy (PRG)</label>
     </div>
 
+    <div class="sekcja">
+      <h2>Strefy</h2>
+      <div id="strefy"></div>
+      <p class="info" style="margin-top:6px">
+        <a href="#" id="tylko-slad">tylko ślad</a> ·
+        <a href="#" id="wszystkie-strefy">wszystkie</a></p>
+    </div>
+
     <div class="sekcja legenda">
       <h2>Legenda</h2>
       <div><span class="znacznik" style="background:var(--slad)"></span>ślad drogi / w śladzie</div>
@@ -140,8 +148,39 @@ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 }).addTo(mapa);
 
+const STREFY_NAZWY = ["w śladzie", "nad tunelem", "0-20 m", "20-30 m",
+                      "30-50 m", "50-200 m"];
+const BEZ_STREFY = "—";
+const podgrupy = {};   // warstwa -> strefa -> L.LayerGroup
+
 for (const nazwa of ["korytarz", "budynki", "adresy"]) {
   warstwyMapy[nazwa] = L.layerGroup().addTo(mapa);
+  podgrupy[nazwa] = {};
+  // Korytarz nie ma stref, ale trzymamy go w tej samej strukturze, zeby
+  // przelaczanie dzialalo jednolicie.
+  for (const strefa of [BEZ_STREFY].concat(STREFY_NAZWY)) {
+    podgrupy[nazwa][strefa] = L.layerGroup().addTo(warstwyMapy[nazwa]);
+  }
+}
+
+function strefaObiektu(p) {
+  return STREFY_NAZWY.includes(p.strefa) ? p.strefa : BEZ_STREFY;
+}
+
+function strefaWlaczona(strefa) {
+  if (strefa === BEZ_STREFY) return true;
+  const pole = document.querySelector('[data-strefa="' + strefa + '"]');
+  return !pole || pole.checked;
+}
+
+function odswiezStrefy() {
+  for (const warstwa of Object.keys(podgrupy)) {
+    for (const strefa of Object.keys(podgrupy[warstwa])) {
+      const grupa = podgrupy[warstwa][strefa];
+      if (strefaWlaczona(strefa)) warstwyMapy[warstwa].addLayer(grupa);
+      else warstwyMapy[warstwa].removeLayer(grupa);
+    }
+  }
 }
 const znacznikSzukania = L.layerGroup().addTo(mapa);
 
@@ -212,7 +251,8 @@ async function pokazWariant(wariant) {
     wczytane[wariant] = await odpowiedz.json();
   }
   const dane = wczytane[wariant];
-  Object.values(warstwyMapy).forEach(w => w.clearLayers());
+  Object.values(podgrupy).forEach(strefy =>
+    Object.values(strefy).forEach(g => g.clearLayers()));
 
   L.geoJSON(dane, {
     style: stylObiektu,
@@ -223,7 +263,8 @@ async function pokazWariant(wariant) {
     }),
     onEachFeature: (obiekt, warstwa) => {
       warstwa.bindPopup(opisObiektu(obiekt.properties));
-      warstwyMapy[obiekt.properties.warstwa].addLayer(warstwa);
+      podgrupy[obiekt.properties.warstwa][strefaObiektu(obiekt.properties)]
+        .addLayer(warstwa);
       if (obiekt.properties.warstwa === "korytarz" && warstwa.bringToBack) {
         warstwa.bringToBack();
       }
@@ -329,6 +370,30 @@ WARIANTY.forEach(w => {
   pojemnikWariantow.appendChild(przycisk);
 });
 
+const pojemnikStref = document.getElementById("strefy");
+STREFY_NAZWY.forEach((strefa, i) => {
+  const etykieta = document.createElement("label");
+  etykieta.className = "przelacznik";
+  etykieta.innerHTML = '<input type="checkbox" data-strefa="' + strefa +
+    '" checked> <span class="znacznik" style="background:' +
+    BARWY_HEX[i + 1] + '"></span>' + strefa;
+  etykieta.querySelector("input").addEventListener("change", odswiezStrefy);
+  pojemnikStref.appendChild(etykieta);
+});
+
+function ustawStrefy(wlaczone) {
+  document.querySelectorAll("[data-strefa]").forEach((pole, i) => {
+    pole.checked = wlaczone === "wszystkie" ? true : i < 2;
+  });
+  odswiezStrefy();
+}
+document.getElementById("tylko-slad").addEventListener("click", e => {
+  e.preventDefault(); ustawStrefy("slad");
+});
+document.getElementById("wszystkie-strefy").addEventListener("click", e => {
+  e.preventDefault(); ustawStrefy("wszystkie");
+});
+
 document.querySelectorAll("[data-warstwa]").forEach(pole => {
   pole.addEventListener("change", () => {
     const warstwa = warstwyMapy[pole.dataset.warstwa];
@@ -345,7 +410,8 @@ mapa.on("moveend", zapiszStanUrl);
 
 mapa.on("zoomend", () => {
   const r = promienPunktu();
-  warstwyMapy.adresy.eachLayer(w => { if (w.setRadius) w.setRadius(r); });
+  Object.values(podgrupy.adresy).forEach(g =>
+    g.eachLayer(w => { if (w.setRadius) w.setRadius(r); }));
 });
 
 pokazWariant(stanStartowy ? stanStartowy.wariant : "A");

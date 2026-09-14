@@ -91,10 +91,23 @@ NAD_TUNELEM = "nad tunelem"
 DO_ROZBIORKI = "do rozbiórki"
 BUDYNKI = "budynki"
 BUDYNKI_MIESZKALNE = "budynki mieszkalne"
+BUDYNKI_OSWIATA = "budynki oświaty i sportu"
+BUDYNKI_ZDROWIE = "budynki opieki zdrowotnej"
 
 PLIK_BUDYNKOW = "budynki/budynki.gpkg"
-# EGiB: "m" to budynek mieszkalny; reszta to gospodarcze, garaze, przemyslowe itd.
+
+# Rodzaj budynku wg KST w EGiB (atrybut EGB_RodzajWgKST):
+#   m mieszkalny            g produkcyjny, uslugowy i gospodarczy
+#   t transportu i lacznosci  k oswiaty, nauki i kultury oraz sportu
+#   z szpitala i opieki zdrowotnej   b biurowy      h handlowo-uslugowy
+#   p przemyslowy           s zbiornik, silos, magazyn   i niemieszkalny
+# https://www.gov.pl/web/zagospodarowanieprzestrzenne/infografika-oznaczenia-budynkow-egib-opis
 RODZAJ_MIESZKALNY = "m"
+# Wyodrebnione osobno, bo szkola albo przychodnia w sladzie to co innego niz
+# stodola — a bez tego podzialu obie znikaly we wspolnej liczbie "budynki".
+# OSP, kosciolow czy poczty EGiB nie rozroznia: ida do "i" razem z szopami.
+RODZAJ_OSWIATA = "k"
+RODZAJ_ZDROWIE = "z"
 
 # Nazwy warstw w wariant-X-slad.gpkg. Korytarz musi byc adresowany po nazwie,
 # bo od kiedy plik ma kilka warstw, odczyt bez wskazania warstwy siegnalby
@@ -338,10 +351,13 @@ def podsumuj(wariant, adresy, szacowany=False, budynki=None):
     puste = pd.Series(dtype=object)
     _dopisz_strefy(wiersz, BUDYNKI,
                    budynki["strefa"] if len(budynki) else puste)
-    mieszkalne = (budynki[budynki["RODZAJ"] == RODZAJ_MIESZKALNY]
-                  if len(budynki) else budynki)
-    _dopisz_strefy(wiersz, BUDYNKI_MIESZKALNE,
-                   mieszkalne["strefa"] if len(mieszkalne) else puste)
+    for przedrostek, rodzaj in ((BUDYNKI_MIESZKALNE, RODZAJ_MIESZKALNY),
+                                (BUDYNKI_OSWIATA, RODZAJ_OSWIATA),
+                                (BUDYNKI_ZDROWIE, RODZAJ_ZDROWIE)):
+      wybrane = (budynki[budynki["RODZAJ"] == rodzaj]
+                 if len(budynki) else budynki)
+      _dopisz_strefy(wiersz, przedrostek,
+                     wybrane["strefa"] if len(wybrane) else puste)
 
   wiersz["szacunek"] = "tak" if szacowany else ""
   return wiersz
@@ -547,7 +563,13 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
   tabela = tabela.sort_values("wariant").reset_index(drop=True)
   tabela.to_csv(sciezka, index=False)
   zapisz_liste_rozbiorek()
-  postep("\n" + tabela.to_string(index=False))
+  # Pelna tabela ma ponad 50 kolumn — w terminalu pokazujemy przekroj,
+  # komplet i tak idzie do podsumowanie.csv.
+  skrot = ["wariant", W_SLADZIE, NAD_TUNELEM, DO_ROZBIORKI,
+           "≤{} m".format(consts.STREFY[-1]), BUDYNKI, BUDYNKI_MIESZKALNE,
+           BUDYNKI_OSWIATA, BUDYNKI_ZDROWIE, "szacunek"]
+  skrot = [k for k in skrot if k in tabela.columns]
+  postep("\n" + tabela[skrot].to_string(index=False))
   if any(w["szacunek"] for w in podsumowania):
     postep("\n[SZACUNEK] — brak warstw skarp w materialach; slad z pobocza"
            " poszerzony o {:.1f} m na strone.".format(consts.MARGINES_SKARP))

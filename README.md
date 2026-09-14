@@ -143,6 +143,53 @@ albo braki w ewidencji — raport tego nie rozstrzyga.
 Budynki są **opcjonalne**: jeśli `budynki/budynki.gpkg` nie ma, raport liczy się
 jak dotąd, tylko bez kolumn budynkowych.
 
+### Szkoły, przychodnie i inne budynki użyteczności publicznej
+
+EGiB klasyfikuje każdy budynek polem `RODZAJ` (atrybut `EGB_RodzajWgKST`).
+Bez tego podziału szkoła i stodoła liczą się tak samo, dlatego obok
+`budynki mieszkalne` raport wydziela dwie kategorie:
+
+| kod | znaczenie | kolumna w raporcie |
+|---|---|---|
+| `m` | mieszkalny | `budynki mieszkalne` |
+| `k` | oświaty, nauki i kultury oraz sportu | `budynki oświaty i sportu` |
+| `z` | szpitala i inne budynki opieki zdrowotnej | `budynki opieki zdrowotnej` |
+| `g` | produkcyjny, usługowy i gospodarczy | — |
+| `t` | transportu i łączności | — |
+| `b` | biurowy | — |
+| `h` | handlowo-usługowy | — |
+| `p` | przemysłowy | — |
+| `s` | zbiornik, silos i budynek magazynowy | — |
+| `i` | budynek niemieszkalny (reszta) | — |
+
+Pełne oznaczenia:
+[infografika GUGiK](https://www.gov.pl/web/zagospodarowanieprzestrzenne/infografika-oznaczenia-budynkow-egib-opis).
+
+Obie kategorie liczone są w tej samej siatce stref co reszta. Rozkład:
+
+| wariant | oświata: korytarz / ≤200 m | zdrowie: korytarz / ≤200 m |
+|---|---|---|
+| A | **1** / 2 | 0 / 1 |
+| B | 0 / 1 | 0 / 0 |
+| C | 0 / 6 | 0 / 0 |
+| D | 0 / 9 | 0 / 1 |
+| E | 0 / 9 | 0 / **8** |
+| F | 0 / 4 | 0 / 0 |
+
+Ten jeden budynek oświatowy w śladzie wariantu A to **Szkoła Podstawowa nr 1
+im. Adama Mickiewicza w Świątnikach Górnych** (1331 m²). Leży w strefie
+`nad tunelem`, więc jej los zależy od technologii drążenia — przy metodzie
+odkrywkowej znika razem z resztą pasa.
+
+Warto zestawić to z liczbą rozbiórek: wariant E wypada najlepiej pod względem
+budynków w korytarzu (123), ale ma najwięcej obiektów oświatowych i zdrowotnych
+w pasie 200 m.
+
+**Czego EGiB nie powie.** Remizy OSP nie mają własnej klasy — trafiają do `i`
+razem z szopami i wiatami, podobnie kościoły, poczty czy świetlice. Żeby je
+wyodrębnić, trzeba drugiego źródła (OpenStreetMap albo BDOT10k, który ma funkcje
+budynków i nazwy własne). Raport ich nie wskazuje i nie udaje, że potrafi.
+
 ## Sprawdzanie pojedynczego adresu
 
 ```bash
@@ -189,7 +236,10 @@ GitHub Pages z katalogu [docs/](docs/):
 <https://lechup.github.io/stop-s7/>
 
 Wpisanie adresu pokazuje odległość i strefę we wszystkich wariantach naraz —
-to odpowiednik trybu `--adres`, tyle że w przeglądarce. Widok zapisuje się
+to odpowiednik trybu `--adres`, tyle że w przeglądarce. Budynki i adresy widać
+we wszystkich strefach do 200 m, a każdą strefę da się osobno odkliknąć
+(skróty `tylko ślad` i `wszystkie`), żeby odsiać tło i zobaczyć sam pas zajęcia
+terenu. Widok zapisuje się
 w adresie URL (`#C/17/49.9454/19.9742`), więc da się podesłać komuś link
 prosto na jego ulicę.
 
