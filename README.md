@@ -248,9 +248,14 @@ we wszystkich strefach do 200 m, a każdą strefę da się osobno odkliknąć
 (skróty `tylko ślad` i `wszystkie`), żeby odsiać tło i zobaczyć sam pas zajęcia
 terenu.
 
+Budynki da się zawęzić do jednego rodzaju z EGiB — lista pod przełącznikiem
+warstwy, z liczbą obiektów przy każdej pozycji. Wybór działa jednocześnie na
+mapę i na statystyki, więc można obejrzeć same domy mieszkalne albo sprawdzić,
+gdzie stoją te dwa budynki oświatowe.
+
 Przy każdej strefie stoi liczba adresów i budynków, a pod spodem suma tego, co
-aktualnie widać na mapie — reagująca zarówno na odklikanie strefy, jak i całej
-warstwy. Liczby zgadzają się z `podsumowanie.csv`, więc tabelka w panelu jest
+aktualnie widać na mapie — reagująca na odklikanie strefy, wybór rodzaju
+budynku i wyłączenie całej warstwy. Liczby zgadzają się z `podsumowanie.csv`, więc tabelka w panelu jest
 jednocześnie legendą i kontrolą. Widok zapisuje się
 w adresie URL (`#C/17/49.9454/19.9742`), więc da się podesłać komuś link
 prosto na jego ulicę.

@@ -34,6 +34,9 @@
                       font-size: 14px; cursor: pointer; }
   #szukaj { width: 100%; padding: 9px 10px; font-size: 14px; border: 1px solid var(--ramka);
             border-radius: 6px; }
+  #typ-budynku { width: 100%; margin: 4px 0 2px 26px; width: calc(100% - 26px);
+                 padding: 5px 8px; font-size: 13px; border: 1px solid var(--ramka);
+                 border-radius: 5px; background: #fff; color: var(--tekst); }
   #wyniki { margin-top: 8px; }
   .trafienie { padding: 7px 8px; border: 1px solid var(--ramka); border-radius: 6px;
                margin-bottom: 6px; cursor: pointer; background: #fff; font-size: 14px; }
@@ -96,6 +99,7 @@
       <h2>Warstwy</h2>
       <label class="przelacznik"><input type="checkbox" data-warstwa="korytarz" checked> ślad drogi</label>
       <label class="przelacznik"><input type="checkbox" data-warstwa="budynki" checked> budynki (EGiB)</label>
+      <select id="typ-budynku" aria-label="Rodzaj budynku"></select>
       <label class="przelacznik"><input type="checkbox" data-warstwa="adresy" checked> adresy (PRG)</label>
     </div>
 
@@ -184,6 +188,11 @@ const STREFY_NAZWY = ["w śladzie", "nad tunelem", "0-20 m", "20-30 m",
                       "30-50 m", "50-200 m"];
 const BEZ_STREFY = "—";
 const podgrupy = {};   // warstwa -> strefa -> L.LayerGroup
+// Budynki dzielimy dodatkowo po rodzaju, zeby dalo sie ogladac same domy albo
+// sama oswiate — i zeby liczby w tabelce szly za tym wyborem.
+const grupyTypow = {};  // strefa -> rodzaj -> L.LayerGroup (wewnatrz podgrupy.budynki)
+const RODZAJE_KOLEJNOSC = ["m", "k", "z", "h", "b", "g", "p", "t", "s", "i"];
+let typWybrany = "*";   // "*" = wszystkie rodzaje
 
 // Kolejnosc rysowania przez panes, a nie przez kolejnosc dodawania warstw:
 // przelaczanie stref zdejmuje i dodaje grupy z powrotem, co bez tego
@@ -214,6 +223,58 @@ function strefaWlaczona(strefa) {
   return !pole || pole.checked;
 }
 
+function odswiezTypy() {
+  for (const strefa of Object.keys(grupyTypow)) {
+    for (const [rodzaj, grupa] of Object.entries(grupyTypow[strefa])) {
+      const widoczna = typWybrany === "*" || typWybrany === rodzaj;
+      if (widoczna) podgrupy.budynki[strefa].addLayer(grupa);
+      else podgrupy.budynki[strefa].removeLayer(grupa);
+    }
+  }
+}
+
+function liczbaBudynkow(strefa) {
+  // Nie mozna liczyc warstw w podgrupie strefy: siedza w niej grupy rodzajow,
+  // a nie pojedyncze budynki.
+  const wgRodzaju = grupyTypow[strefa] || {};
+  let suma = 0;
+  for (const [rodzaj, grupa] of Object.entries(wgRodzaju)) {
+    if (typWybrany === "*" || typWybrany === rodzaj) suma += grupa.getLayers().length;
+  }
+  return suma;
+}
+
+function zbudujWyborTypu() {
+  const licznik = {};
+  for (const strefa of Object.keys(grupyTypow)) {
+    for (const [rodzaj, grupa] of Object.entries(grupyTypow[strefa])) {
+      licznik[rodzaj] = (licznik[rodzaj] || 0) + grupa.getLayers().length;
+    }
+  }
+  const razem = Object.values(licznik).reduce((a, b) => a + b, 0);
+  const lista = document.getElementById("typ-budynku");
+  const poprzedni = typWybrany;
+
+  lista.innerHTML = "";
+  const wszystkie = document.createElement("option");
+  wszystkie.value = "*";
+  wszystkie.textContent = "wszystkie rodzaje (" + razem.toLocaleString("pl-PL") + ")";
+  lista.appendChild(wszystkie);
+
+  const pozostale = Object.keys(licznik).filter(r => !RODZAJE_KOLEJNOSC.includes(r));
+  for (const rodzaj of RODZAJE_KOLEJNOSC.concat(pozostale.sort())) {
+    if (!licznik[rodzaj]) continue;
+    const opcja = document.createElement("option");
+    opcja.value = rodzaj;
+    opcja.textContent = opisRodzaju(rodzaj) + " (" +
+      licznik[rodzaj].toLocaleString("pl-PL") + ")";
+    lista.appendChild(opcja);
+  }
+  // Zachowaj wybor przy zmianie wariantu, o ile taki rodzaj tam wystepuje.
+  typWybrany = (poprzedni === "*" || licznik[poprzedni]) ? poprzedni : "*";
+  lista.value = typWybrany;
+}
+
 // Liczby przy przelacznikach: ile obiektow jest w kazdej strefie i ile widac
 // lacznie. Bez tego trzeba je zgadywac z mapy.
 function odswiezLiczby() {
@@ -221,10 +282,12 @@ function odswiezLiczby() {
   for (const strefa of STREFY_NAZWY) {
     const wiersz = document.querySelector('[data-wiersz="' + strefa + '"]');
     if (!wiersz) continue;
-    const liczby = {};
+    const grupaAdresow = podgrupy.adresy[strefa];
+    const liczby = {
+      adresy: grupaAdresow ? grupaAdresow.getLayers().length : 0,
+      budynki: liczbaBudynkow(strefa),
+    };
     for (const warstwa of ["adresy", "budynki"]) {
-      const grupa = podgrupy[warstwa][strefa];
-      liczby[warstwa] = grupa ? grupa.getLayers().length : 0;
       wiersz.querySelector('[data-liczba="' + warstwa + '"]').textContent =
         liczby[warstwa].toLocaleString("pl-PL");
     }
@@ -342,6 +405,8 @@ async function pokazWariant(wariant) {
   const dane = wczytane[wariant];
   Object.values(podgrupy).forEach(strefy =>
     Object.values(strefy).forEach(g => g.clearLayers()));
+  // clearLayers usunelo podgrupy rodzajow razem z zawartoscia — zerujemy indeks.
+  Object.keys(grupyTypow).forEach(k => delete grupyTypow[k]);
 
   L.geoJSON(dane, {
     style: stylObiektu,
@@ -353,8 +418,19 @@ async function pokazWariant(wariant) {
     }),
     onEachFeature: (obiekt, warstwa) => {
       warstwa.bindPopup(opisObiektu(obiekt.properties));
-      podgrupy[obiekt.properties.warstwa][strefaObiektu(obiekt.properties)]
-        .addLayer(warstwa);
+      const nazwaWarstwy = obiekt.properties.warstwa;
+      const strefa = strefaObiektu(obiekt.properties);
+      if (nazwaWarstwy === "budynki") {
+        const rodzaj = obiekt.properties.RODZAJ || "?";
+        if (!grupyTypow[strefa]) grupyTypow[strefa] = {};
+        if (!grupyTypow[strefa][rodzaj]) {
+          grupyTypow[strefa][rodzaj] =
+            L.layerGroup().addTo(podgrupy.budynki[strefa]);
+        }
+        grupyTypow[strefa][rodzaj].addLayer(warstwa);
+      } else {
+        podgrupy[nazwaWarstwy][strefa].addLayer(warstwa);
+      }
     }
   });
 
@@ -364,6 +440,8 @@ async function pokazWariant(wariant) {
     mapa.__dopasowano = true;
   }
   odswiezOpis();
+  zbudujWyborTypu();
+  odswiezTypy();
   odswiezLiczby();
   zapiszStanUrl();
 }
@@ -486,6 +564,12 @@ document.getElementById("tylko-slad").addEventListener("click", e => {
 });
 document.getElementById("wszystkie-strefy").addEventListener("click", e => {
   e.preventDefault(); ustawStrefy("wszystkie");
+});
+
+document.getElementById("typ-budynku").addEventListener("change", (zdarzenie) => {
+  typWybrany = zdarzenie.target.value;
+  odswiezTypy();
+  odswiezLiczby();
 });
 
 document.querySelectorAll("[data-warstwa]").forEach(pole => {
