@@ -40,6 +40,7 @@ def znajdz_plik_adresow():
             KATALOG_ADRESOW, WZORZEC_ADRESOW))
 
   odrzucone = []
+  pasujace = []
   for sciezka in kandydaci:
     try:
       pola = set(pyogrio.read_info(sciezka)["fields"])
@@ -50,8 +51,27 @@ def znajdz_plik_adresow():
     if brakuje:
       odrzucone.append((sciezka, "brak pol: " + ", ".join(brakuje)))
       continue
-    _plik_adresow = sciezka
-    return sciezka
+    pasujace.append(sciezka)
+
+  if len(pasujace) == 1:
+    _plik_adresow = pasujace[0]
+    return _plik_adresow
+
+  if len(pasujace) > 1:
+    # Po odswiezeniu danych w katalogu potrafi zostac stary plik obok nowego —
+    # obydwa maja wymagane kolumny, wiec sama struktura ich nie rozroznia.
+    # Wybor alfabetyczny cichaczem wskazalby "NOWE_PRG_..." (dane z grudnia)
+    # zamiast "PRG_..." (wrzesniowe), dlatego decyduje wiek danych.
+    wiek = [(najnowsza_data(s), s) for s in pasujace]
+    wiek.sort(key=lambda para: (para[0] is not None, para[0]))
+    _plik_adresow = wiek[-1][1]
+    print("Uwaga: {} pliki z adresami maja wymagane kolumny. Biore najnowszy:".format(
+        len(pasujace)))
+    for data, sciezka in reversed(wiek):
+      print("  {} {} (stan {})".format(
+          "->" if sciezka == _plik_adresow else "  ", sciezka,
+          data.strftime("%d.%m.%Y") if data else "nieustalony"))
+    return _plik_adresow
 
   raise SystemExit(
       "Znalazlem pliki z adresami, ale zaden nie ma wymaganych pol ({}).\n"
@@ -95,9 +115,14 @@ def stan_danych():
   Pole DATA_NAD zawiera w zrodle bledne wpisy (daty w rodzaju 0203 albo 2984),
   wiec odsiewamy wartosci poza realnym zakresem. Zwraca None, jesli pliku nie
   da sie odczytac albo nie ma takiego pola."""
+  return najnowsza_data(znajdz_plik_adresow())
+
+
+def najnowsza_data(sciezka):
+  """Najnowsza sensowna data nadania adresu w danym pliku (None, gdy sie nie da)."""
   try:
     dane = pyogrio.read_dataframe(
-        znajdz_plik_adresow(), columns=["DATA_NAD"], read_geometry=False)
+        sciezka, columns=["DATA_NAD"], read_geometry=False)
   except Exception:
     return None
   if "DATA_NAD" not in dane:

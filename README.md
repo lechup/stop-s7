@@ -7,7 +7,7 @@ Ile punktów adresowych leży w śladzie projektowanej drogi S7, a ile w strefac
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-python3 pobierz_dane.py      # dane wejściowe (96 MB, po rozpakowaniu 1,3 GB)
+python3 pobierz_dane.py      # dane wejściowe (54 MB, po rozpakowaniu 790 MB)
 ./uruchom.sh                 # policz wszystkie warianty
 ```
 
@@ -127,22 +127,23 @@ daje niezależną kontrolę:
 
 | wariant | bufor źródłowy | nasze ≤200 m | różnica |
 |---|---|---|---|
-| A | 873 | 872 | −0,11% |
-| C | 904 | 900 | −0,44% |
-| E | 1484 | 1482 | −0,13% |
+| A | 903 | 902 | −0,11% |
+| C | 908 | 904 | −0,44% |
+| E | 1495 | 1493 | −0,13% |
 
 Kontrolę odpala `functions.kontrola(wariant)`.
 
 ## Dane wejściowe
 
-Katalogi `warianty/` i `wojewodztwa-adresy/` nie są trzymane w repozytorium —
-po rozpakowaniu zajmują ok. 1,3 GB. Leżą jako assety release'a na GitHubie
-i pobiera je `pobierz_dane.py`:
+Katalogi `warianty/`, `wojewodztwa-adresy/` i `budynki/` nie są trzymane
+w repozytorium — po rozpakowaniu zajmują ok. 790 MB. Leżą jako assety release'a
+na GitHubie i pobiera je `pobierz_dane.py`:
 
 | katalog | zawartość | archiwum |
 |---|---|---|
 | `warianty/` | pliki GML wariantów A–F | `warianty.tar.gz` (8 MB) |
-| `wojewodztwa-adresy/` | shapefile'e PRG dla małopolski | `wojewodztwa-adresy.tar.gz` (88 MB) |
+| `wojewodztwa-adresy/` | punkty adresowe PRG dla małopolski | `wojewodztwa-adresy.tar.gz` (44 MB) |
+| `budynki/` | obrysy budynków EGiB przy korytarzu | `budynki.tar.gz` (1 MB) |
 
 Przydatne opcje:
 
@@ -176,6 +177,10 @@ i Technologii z 27 lipca 2021 r. w sprawie ewidencji gruntów i budynków.
 ```bash
 .venv/bin/python pobierz_budynki.py
 ```
+
+Zwykle nie trzeba tego uruchamiać — `pobierz_dane.py` ściąga gotową migawkę
+z release'a. `pobierz_budynki.py` przydaje się, gdy chcesz świeże dane
+(EGiB zmienia się codziennie) albo inny zasięg po zmianie wariantów.
 
 Zakres pobierania to wspólny korytarz wszystkich wariantów poszerzony o 200 m
 (49 km²) — dokładnie tyle, ile potrzeba do wypełnienia całej tabeli wyników.
@@ -216,8 +221,43 @@ struktura, o zupełnie innych polach:
 Sama nazwa nie mówi więc nic. Jeśli żaden znaleziony plik nie ma wymaganych
 kolumn, skrypt przerywa i mówi wprost, że to prawdopodobnie stara struktura.
 
+Gdy pasujących plików jest **kilka** — co zdarza się po odświeżeniu danych, bo
+stary komplet zostaje obok nowego — decyduje wiek danych, a nie kolejność
+alfabetyczna. Bez tego wygrywałby `NOWE_PRG_PunktyAdresowe_12.shp` (litera `N`
+przed `P`), czyli plik **starszy** od `PRG_PunktyAdresowe_12.shp`, i raport po
+cichu liczyłby na nieaktualnych adresach. Skrypt wypisuje wtedy, które pliki
+znalazł i który wybrał.
+
 `./uruchom.sh --mode dane` pokazuje, który plik został wybrany, ile ma rekordów
 i do kiedy sięgają dane (najnowsza sensowna data nadania adresu).
+
+### Odświeżanie danych adresowych
+
+Robi to [pobierz_prg.py](pobierz_prg.py):
+
+```bash
+.venv/bin/python pobierz_prg.py          # małopolskie
+.venv/bin/python pobierz_prg.py --kod 14 # inne województwo
+```
+
+Nie da się tego zrobić prościej, bo GUGiK nie publikuje już paczek
+wojewódzkich w SHP pod stałym adresem. Nazwy plików wewnątrz paczki zbiorczej
+zawierają znacznik czasu generowania (`12_malopolskie_11.09.2026_11.35.23.gml`),
+więc nie można ich adresować bezpośrednio — trzeba pobrać całą paczkę
+ogólnopolską (ok. 755 MB) i wyciąć z niej województwo. Serwer nie obsługuje
+żądań zakresowych, więc skrótu tu nie ma.
+
+Paczka jest w **GML**, a nie SHP, i różni się układem: w SHP nazwa miejscowości
+i ulicy stoi wprost przy punkcie adresowym, a w GML jest podlinkowana przez
+`xlink:href` do osobnych obiektów `AD_Miejscowosc` i `AD_UlicaPlac`. Skrypt
+czyta więc plik dwa razy — najpierw buduje słowniki, potem rozwiązuje odnośniki
+przy punktach — i zapisuje wynik jako SHP o strukturze zgodnej z dotychczasową,
+żeby reszta kodu nie wymagała zmian.
+
+Jednej rzeczy w GML nie ma w ogóle: **nazwy gminy**, jest tylko kod TERYT.
+Nazwy brane są z poprzedniej wersji pliku (kody w GML mają 7 cyfr, w SHP 6 —
+ostatnia to rodzaj gminy), więc pierwsze uruchomienie wymaga, żeby stary plik
+jeszcze leżał w `wojewodztwa-adresy/`.
 
 ### Źródło danych
 
@@ -228,7 +268,7 @@ przez Główny Urząd Geodezji i Kartografii (GUGiK):
 
 Zgodnie z informacją na Geoportalu dane PRG są udostępniane bezpłatnie
 i do dowolnego wykorzystania. Wykorzystany zestaw to punkty adresowe
-dla województwa małopolskiego (kod 12) — 856 166 rekordów, EPSG:2180.
+dla województwa małopolskiego (kod 12) — 866 938 rekordów, EPSG:2180.
 
 Pliki GML z wariantami przebiegu trasy pochodzą z materiałów
 z konsultacji społecznych dotyczących przebiegu S7.
@@ -268,3 +308,4 @@ się pomylić, które wyniki pochodzą z których danych.
 - [dane.py](dane.py) — konfiguracja paczek z danymi (tag release'a, sumy kontrolne)
 - [pobierz_dane.py](pobierz_dane.py) — pobieranie danych wejściowych
 - [pobierz_budynki.py](pobierz_budynki.py) — pobieranie obrysów budynków z EGiB
+- [pobierz_prg.py](pobierz_prg.py) — odświeżanie punktów adresowych PRG
