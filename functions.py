@@ -121,25 +121,51 @@ def wczytaj_budynki():
 
 
 def trafione_budynki(warstwy):
-  """Budynki przecinajace korytarz, z kolumna 'strefa' jak przy adresach.
+  """Budynki do najdalszej strefy od korytarza, ze strefa i odlegloscia.
 
-  Liczymy przeciecie, a nie zawieranie: budynek stojacy w polowie w sladzie
-  i tak idzie do rozbiorki. Zwraca None, gdy nie ma danych o budynkach."""
+  Liczone tak samo jak adresy, zeby obie miary dalo sie zestawiac: przeciecie
+  ze sladem to "w sladzie", przeciecie z pasem tunelu to "nad tunelem",
+  a poza nimi decyduje odleglosc do najblizszej czesci korytarza.
+
+  Przeciecie, a nie zawieranie: budynek stojacy w sladzie polowa i tak trafia
+  w pas zajecia terenu. Zwraca None, gdy nie ma danych o budynkach."""
   budynki = wczytaj_budynki()
   if budynki is None:
     return None
 
-  trafienia = sorted(set(budynki.sindex.query(
-      warstwy["korytarz"], predicate="intersects")))
-  trafione = budynki.iloc[trafienia].reset_index(drop=True)
-  if trafione.empty:
-    return trafione.assign(strefa=[])
+  korytarz = warstwy["korytarz"]
+  czesci = gpd.GeoDataFrame(
+      geometry=list(shapely.get_parts(korytarz)), crs=consts.CRS_METRYCZNY)
+  pary = gpd.sjoin_nearest(
+      budynki, czesci, max_distance=float(max(consts.STREFY)),
+      distance_col="odleglosc_m", how="inner")
+  if pary.empty:
+    return budynki.iloc[0:0].assign(odleglosc_m=[], strefa=[])
 
-  w_sladzie = set(trafione.sindex.query(
+  # sjoin_nearest zwraca wiersz na kazda remisujaca czesc korytarza.
+  pary = pary.sort_values("odleglosc_m").groupby(level=0).first()
+  trafione = budynki.loc[pary.index].copy()
+  trafione["odleglosc_m"] = pary["odleglosc_m"].round(1)
+
+  w_sladzie = set(budynki.sindex.query(
       warstwy["powierzchnia"], predicate="intersects"))
-  trafione["strefa"] = [W_SLADZIE if i in w_sladzie else NAD_TUNELEM
-                        for i in range(len(trafione))]
-  return trafione
+  nad_tunelem = set()
+  if warstwy.get("tunel") is not None:
+    nad_tunelem = set(budynki.sindex.query(
+        warstwy["tunel"], predicate="intersects")) - w_sladzie
+
+  pozycje = {idx: i for i, idx in enumerate(budynki.index)}
+  strefy = []
+  for idx, odleglosc in zip(trafione.index, trafione["odleglosc_m"]):
+    pozycja = pozycje[idx]
+    if pozycja in w_sladzie:
+      strefy.append(W_SLADZIE)
+    elif pozycja in nad_tunelem:
+      strefy.append(NAD_TUNELEM)
+    else:
+      strefy.append(_strefa(odleglosc) or nazwy_stref()[2])
+  trafione["strefa"] = strefy
+  return trafione.reset_index(drop=True)
 
 
 def wczytaj_adresy(obszar):
@@ -271,9 +297,10 @@ def policz(wariant, postep=None):
 def podsumuj(wariant, adresy, szacowany=False, budynki=None):
   """Wiersz podsumowania: strefy rozlaczne + kolumny narastajace.
 
-  Kolumny budynkowe liczone sa z obrysow EGiB i sa NIEZALEZNA miara, a nie
-  poprawka do liczby adresow: jeden budynek miewa kilka adresow albo zaden,
-  a EGiB obejmuje takze garaze i budynki gospodarcze."""
+  Budynki dostaja te sama siatke stref co adresy, zeby obie miary dalo sie
+  zestawiac wprost. To NIEZALEZNE miary, a nie poprawka jedna do drugiej:
+  jeden budynek miewa kilka adresow albo zaden, a EGiB obejmuje takze garaze
+  i budynki gospodarcze — stad osobno "budynki mieszkalne"."""
   wiersz = {"wariant": wariant}
   liczby = adresy["strefa"].value_counts() if len(adresy) else {}
   for nazwa in nazwy_stref():
@@ -281,17 +308,33 @@ def podsumuj(wariant, adresy, szacowany=False, budynki=None):
 
   wiersz[DO_ROZBIORKI] = wiersz[W_SLADZIE] + wiersz[NAD_TUNELEM]
 
-  if budynki is not None:
-    wiersz[BUDYNKI] = len(budynki)
-    wiersz[BUDYNKI_MIESZKALNE] = int(
-        (budynki["RODZAJ"] == RODZAJ_MIESZKALNY).sum()) if len(budynki) else 0
-
   narastajaco = wiersz[DO_ROZBIORKI]
   poprzedni = 0
   for prog in consts.STREFY:
     narastajaco += wiersz["{}-{} m".format(poprzedni, prog)]
     wiersz["≤{} m".format(prog)] = narastajaco
     poprzedni = prog
+
+  if budynki is not None:
+    liczby_b = budynki["strefa"].value_counts() if len(budynki) else {}
+    for nazwa in nazwy_stref():
+      wiersz["{} {}".format(BUDYNKI, nazwa)] = int(liczby_b.get(nazwa, 0))
+
+    wiersz[BUDYNKI] = (wiersz["{} {}".format(BUDYNKI, W_SLADZIE)]
+                       + wiersz["{} {}".format(BUDYNKI, NAD_TUNELEM)])
+    # Mieszkalne tylko dla korytarza — tam, gdzie rozstrzyga sie rozbiorka.
+    w_korytarzu = budynki[budynki["strefa"].isin([W_SLADZIE, NAD_TUNELEM])] \
+        if len(budynki) else budynki
+    wiersz[BUDYNKI_MIESZKALNE] = int(
+        (w_korytarzu["RODZAJ"] == RODZAJ_MIESZKALNY).sum()) if len(w_korytarzu) else 0
+
+    narastajaco = wiersz[BUDYNKI]
+    poprzedni = 0
+    for prog in consts.STREFY:
+      narastajaco += wiersz["{} {}-{} m".format(BUDYNKI, poprzedni, prog)]
+      wiersz["{} ≤{} m".format(BUDYNKI, prog)] = narastajaco
+      poprzedni = prog
+
   wiersz["szacunek"] = "tak" if szacowany else ""
   return wiersz
 
@@ -467,8 +510,9 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
         wiersz["≤{} m".format(consts.STREFY[-1])],
         "  [SZACUNEK]" if szacowany else ""))
     if budynki is not None:
-      postep("  budynkow w korytarzu {} (mieszkalnych {})".format(
-          wiersz[BUDYNKI], wiersz[BUDYNKI_MIESZKALNE]))
+      postep("  budynkow w korytarzu {} (mieszkalnych {}), ≤200 m {}".format(
+          wiersz[BUDYNKI], wiersz[BUDYNKI_MIESZKALNE],
+          wiersz["{} ≤{} m".format(BUDYNKI, consts.STREFY[-1])]))
 
   if not podsumowania:
     return None
@@ -489,8 +533,8 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
       columns=kolejnosc + [k for k in tabela.columns if k not in kolejnosc])
   # Int64 (z wielka litera) dopuszcza braki, wiec wariant policzony bez
   # budynkow zostaje pusty zamiast zamieniac cala kolumne na 225.0.
-  for kolumna in (BUDYNKI, BUDYNKI_MIESZKALNE):
-    if kolumna in tabela:
+  for kolumna in tabela.columns:
+    if kolumna.startswith(BUDYNKI):
       tabela[kolumna] = tabela[kolumna].astype("Int64")
   tabela = tabela.sort_values("wariant").reset_index(drop=True)
   tabela.to_csv(sciezka, index=False)

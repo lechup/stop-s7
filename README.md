@@ -109,6 +109,13 @@ tylko dwie niezależne miary, i nie należy ich mylić:
   `budynki mieszkalne` (`RODZAJ = 'm'`), i to ona jest porównywalna
   z liczbą adresów.
 
+Budynki liczone są w **tej samej siatce stref co adresy** — `w śladzie`,
+`nad tunelem`, `0-20 m`, `20-30 m`, `30-50 m`, `50-200 m` plus kolumny
+narastające `≤20 m` … `≤200 m`, wszystkie z przedrostkiem `budynki`. Strefę
+rozstrzyga odległość do najbliższej części korytarza, dokładnie jak przy
+adresach; `budynki mieszkalne` dotyczy samego korytarza, bo tam rozstrzyga się
+rozbiórka.
+
 Skala rozbieżności dla śladu z pasem nad tunelem:
 
 | wariant | adresy „do rozbiórki" | budynki | budynki mieszkalne |
