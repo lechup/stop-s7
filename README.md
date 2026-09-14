@@ -293,6 +293,30 @@ Dwie rzeczy warte uwagi przy zmianach:
   wypada przejść na własny lub płatny serwis kafelków — polityka OSM dopuszcza
   lekkie użycie, nie ruch z kampanii.
 
+### Statystyki odwiedzin
+
+Strona liczy odwiedziny przez [GoatCounter](https://www.goatcounter.com/):
+
+<https://stop-s7.goatcounter.com>
+
+Wybrany świadomie zamiast Google Analytics: nie używa ciasteczek, nie zbiera
+danych identyfikujących i według dokumentacji nie wymaga banera zgody — a przy
+stronie, na którą ludzie wchodzą sprawdzić, czy stracą dom, wysyłanie ich ruchu
+do Google byłoby kiepskim pomysłem.
+
+Poza odsłonami liczone są dwa zdarzenia:
+
+| zdarzenie | kiedy |
+|---|---|
+| `sprawdzenie-adresu` | ktoś kliknął wynik wyszukiwania — czyli faktycznie sprawdził swój adres, a nie tylko wpisał literę |
+| `wariant-X` | ktoś świadomie przełączył wariant (wczytanie strony się nie liczy) |
+
+**Wysyłana jest wyłącznie nazwa zdarzenia.** Szukana fraza nigdy nie opuszcza
+przeglądarki — to, czego ktoś szuka, jest informacją o tym, gdzie mieszka.
+
+Domyślna ścieżka GoatCountera to `pathname + search`, więc hash ze stanem widoku
+(`#A/17/49.9350/19.9607`) nie rozbija statystyk na tysiące osobnych „stron".
+
 ## Dane wejściowe
 
 Katalogi `warianty/`, `wojewodztwa-adresy/` i `budynki/` nie są trzymane

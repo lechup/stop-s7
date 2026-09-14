@@ -146,6 +146,15 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+// Licznik odwiedzin. Wysylamy WYLACZNIE nazwe zdarzenia — nigdy szukanej
+// frazy ani adresu. To, czego ktos szuka, to informacja o tym, gdzie mieszka;
+// nie ma powodu, zeby opuszczala jego przegladarke.
+function zdarzenie(nazwa, opis) {
+  if (window.goatcounter && window.goatcounter.count) {
+    window.goatcounter.count({ path: nazwa, title: opis, event: true });
+  }
+}
+
 const WARIANTY = ["A", "B", "C", "D", "E", "F"];
 
 // Rodzaj budynku wg KŚT w EGiB (atrybut EGB_RodzajWgKST). Rozwijamy w popupie,
@@ -569,6 +578,7 @@ async function szukaj(zapytanie) {
     element.innerHTML = "<strong>" + tytul + "</strong><br>" +
       '<span class="info">' + [w[3], w[2]].filter(Boolean).join(" ") + "</span>";
     element.addEventListener("click", () => {
+      zdarzenie("sprawdzenie-adresu", "Sprawdzenie adresu");
       document.querySelectorAll(".trafienie .strefy").forEach(t => t.remove());
       element.insertAdjacentHTML("beforeend", tabelaDlaAdresu(w));
       znacznikSzukania.clearLayers();
@@ -585,7 +595,10 @@ WARIANTY.forEach(w => {
   const przycisk = document.createElement("button");
   przycisk.textContent = w;
   przycisk.setAttribute("aria-pressed", String(w === wariantAktywny));
-  przycisk.addEventListener("click", () => pokazWariant(w));
+  przycisk.addEventListener("click", () => {
+    zdarzenie("wariant-" + w, "Wariant " + w);
+    pokazWariant(w);
+  });
   pojemnikWariantow.appendChild(przycisk);
 });
 
@@ -649,5 +662,11 @@ mapa.on("zoomend", () => {
 
 pokazWariant(stanStartowy ? stanStartowy.wariant : "A");
 </script>
+
+<!-- GoatCounter: bez ciasteczek, bez danych identyfikujacych, bez banera zgody.
+     Domyslna sciezka to pathname + search, wiec nasz hash ze stanem widoku
+     (#A/17/49.93/19.96) nie rozbija statystyk na tysiace osobnych "stron". -->
+<script data-goatcounter="https://stop-s7.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
 </body>
 </html>
