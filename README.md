@@ -310,6 +310,12 @@ udostępnia się nie „mapę gdzieś w okolicy", tylko konkretną odpowiedź na
 „co z tym domem". Starsze linki bez tego segmentu działają jak dotąd, a gdy
 adresu nie ma już w danych, strona mówi to wprost zamiast pokazać gołą mapę.
 
+Do mapy dołączona jest strona [metoda.html](docs/metoda.html) —
+„Jak to policzono i czego nie wiemy". Opisuje sposób odtworzenia śladu, obie
+miary, granice danych i kontrole, z kotwicami przy sekcjach (`#kontrole`,
+`#mieszkania`), żeby dało się podlinkować konkretny akapit w sporze o liczby.
+Jest osobnym adresem, więc można ją podesłać bez mapy.
+
 Dane generuje [eksport_web.py](eksport_web.py):
 
 ```bash

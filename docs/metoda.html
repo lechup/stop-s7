@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Metoda — S7, warianty a zabudowa</title>
+<meta name="description" content="Jak policzono, ile domów leży w śladzie planowanej S7 — i czego te liczby nie mówią.">
+<style>
+  :root {
+    --tlo: #f7f7f5; --panel: #fff; --tekst: #1a1a1a; --przygasly: #5f6368;
+    --ramka: #d8d8d4; --akcent: #1a5fb4; --uwaga: #fdf3e3; --uwaga-ramka: #e8c48a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--tlo); color: var(--tekst);
+         font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .strona { max-width: 760px; margin: 0 auto; padding: 28px 20px 70px; }
+  header { border-bottom: 1px solid var(--ramka); padding-bottom: 18px; margin-bottom: 26px; }
+  h1 { font-size: 26px; margin: 0 0 6px; }
+  h2 { font-size: 19px; margin: 34px 0 10px; scroll-margin-top: 16px; }
+  h3 { font-size: 16px; margin: 22px 0 6px; }
+  p { margin: 0 0 12px; }
+  a { color: var(--akcent); }
+  .prowadzenie { color: var(--przygasly); margin: 0; }
+  .powrot { display: inline-block; margin-bottom: 14px; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 16px; font-size: 14px;
+          background: var(--panel); }
+  th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--ramka);
+           vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .03em;
+       color: var(--przygasly); }
+  td.l { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ramka { background: var(--uwaga); border: 1px solid var(--uwaga-ramka);
+           border-radius: 8px; padding: 12px 14px; margin: 16px 0; font-size: 15px; }
+  .ramka p:last-child { margin-bottom: 0; }
+  .spis { background: var(--panel); border: 1px solid var(--ramka); border-radius: 8px;
+          padding: 12px 16px; margin-bottom: 26px; font-size: 15px; }
+  .spis ol { margin: 6px 0 0; padding-left: 20px; }
+  .spis li { padding: 2px 0; }
+  code { background: #eeeeec; padding: 1px 5px; border-radius: 3px; font-size: 13px; }
+  .przypis { font-size: 13px; color: var(--przygasly); }
+  footer { margin-top: 44px; padding-top: 16px; border-top: 1px solid var(--ramka);
+           font-size: 14px; color: var(--przygasly); }
+  .kotwica { font-size: 13px; color: var(--przygasly); text-decoration: none;
+             margin-left: 6px; opacity: 0; }
+  h2:hover .kotwica { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="strona">
+
+<a class="powrot" href="./">← wróć do mapy</a>
+
+<header>
+  <h1>Jak policzono te liczby — i czego nie mówią</h1>
+  <p class="prowadzenie">Strona opisuje metodę stojącą za mapą wariantów S7:
+  skąd pochodzą dane, jak powstaje ślad drogi, jakie kontrole przeszły wyniki
+  i gdzie leżą granice tego, co da się z tych danych wyczytać.</p>
+</header>
+
+<nav class="spis">
+  <strong>Na skróty</strong>
+  <ol>
+    <li><a href="#slad">Skąd bierze się ślad drogi</a></li>
+    <li><a href="#miary">Adresy i budynki — dwie różne miary</a></li>
+    <li><a href="#mieszkania">Czego nie wiemy: liczba mieszkań</a></li>
+    <li><a href="#kontrole">Kontrole wyników</a></li>
+    <li><a href="#zrodla">Źródła danych i licencja</a></li>
+  </ol>
+</nav>
+
+<div class="ramka">
+  <p><strong>To wyliczenie, nie oficjalna lista wywłaszczeń.</strong> Obrys
+  zajęcia terenu nie został opublikowany — ślad drogi jest <em>odtworzony</em>
+  z linii krawędzi jezdni i skarp zawartych w materiałach konsultacyjnych.
+  To nie jest decyzja administracyjna ani zapowiedź rozbiórki konkretnego
+  budynku.</p>
+</div>
+
+<h2 id="slad">1. Skąd bierze się ślad drogi<a class="kotwica" href="#slad">#</a></h2>
+
+<p>Materiały z konsultacji opisują drogę <strong>liniami</strong> — krawędziami
+jezdni i skarpami — a nie gotowym obszarem zajęcia terenu. Ślad trzeba więc z nich
+złożyć. Robi to domknięcie morfologiczne: bufor dodatni skleja biegnące równolegle
+linie w jedną bryłę, a bufor ujemny ściąga ją z powrotem do pierwotnego zasięgu.
+Pojedyncza linia bez sąsiadów znika w tym procesie, więc zostaje wyłącznie obszar
+faktycznie otoczony liniami.</p>
+
+<p>Promień domknięcia wynosi <strong>25 m</strong> i został dobrany kalibracją:
+poniżej 20 m linie skarp się nie domykają i ślad rozpada się na kawałki, a od
+20 m wynik wchodzi na płaskowyż. Otrzymany pas ma średnio 46–49 m szerokości,
+co odpowiada realnemu zajęciu terenu pod drogę tej klasy.</p>
+
+<h3>Wariant B jest szacunkiem</h3>
+<p>Materiały nie zawierają dla wariantu B warstw skarp — ma tylko krawędzie
+jezdni. Jego ślad powstaje z samego pobocza poszerzonego o <strong>7,7 m</strong>
+na stronę, czyli o średni margines skarp zmierzony na pozostałych wariantach
+(rozrzut od +5,3 do +9,6 m). Wszystkie liczby dla B są w związku z tym oznaczone
+jako szacunek.</p>
+
+<h3>Tunele</h3>
+<p>Odcinki tunelowe stanowią od 12% do 26% długości trasy, poza wariantem E,
+który tuneli nie ma. Nad tunelem drążonym budynki zostają, ale nad tunelem
+budowanym metodą odkrywkową teren jest rozkopany na całej szerokości. Materiały
+nie rozstrzygają, która technologia gdzie zostanie użyta, więc te obiekty trafiają
+do <strong>osobnej kategorii „nad tunelem”</strong> — żeby dało się je doliczyć
+albo odliczyć świadomie. Pas wykopu przyjęto jako ±30 m od osi.</p>
+
+<h2 id="miary">2. Adresy i budynki — dwie różne miary<a class="kotwica" href="#miary">#</a></h2>
+
+<p>Mapa podaje obok siebie liczby liczone z <strong>punktów adresowych PRG</strong>
+i z <strong>obrysów budynków EGiB</strong>. To nie jest ta sama wielkość policzona
+dwa razy, tylko dwie niezależne miary:</p>
+
+<ul>
+  <li>punkt adresowy to jedna współrzędna — jeden budynek może mieć kilka adresów
+      albo nie mieć żadnego (garaże, stodoły, budynki gospodarcze),</li>
+  <li>obrys budynku to rzeczywisty kształt; budynek stojący w śladzie połową
+      liczy się jako trafiony, bo pas zajęcia terenu i tak go obejmuje,</li>
+  <li>EGiB liczy wszystko, co stoi — dlatego mapa pozwala zawęzić budynki do
+      wybranych rodzajów, a liczba <strong>budynków mieszkalnych</strong> jest tą
+      porównywalną z liczbą adresów.</li>
+</ul>
+
+<p>W korytarzu wariantu A <strong>76%</strong> punktów adresowych leży wewnątrz
+jakiegoś obrysu z EGiB (w samym śladzie 70%). Pozostałe to punkty postawione obok
+budynku, działki z adresem bez zabudowy albo braki w ewidencji — raport tego nie
+rozstrzyga.</p>
+
+<h2 id="mieszkania">3. Czego nie wiemy: liczba mieszkań<a class="kotwica" href="#mieszkania">#</a></h2>
+
+<p>Raport liczy adresy i budynki, <strong>nie gospodarstwa domowe</strong>. Blok
+z pięćdziesięcioma mieszkaniami byłby tu jednym budynkiem i jednym adresem.
+Sprawdziliśmy trzy możliwe źródła liczby mieszkań i żadne nie nadaje się do użycia:</p>
+
+<table>
+  <tr><th>źródło</th><th>dlaczego odpada</th></tr>
+  <tr><td><strong>NOBC</strong><br><span class="przypis">rejestr TERYT, GUS</span></td>
+      <td>Formalnie obejmuje budynki <em>i mieszkania</em>, ale nie jest publiczny.
+      Bezpłatnie GUS udostępnia tylko TERC, SIMC i ULIC; NOBC wymaga formalnego
+      wniosku, a dla podmiotów spoza wyłączeń ustawowych może być odpłatny.</td></tr>
+  <tr><td><strong>bazy firm kurierskich</strong></td>
+      <td>Własnościowe i niepublikowane, a przy tym pochodne od PRG i EMUiA — nie są
+      niezależnym źródłem. Pobieranie ich łamałoby regulaminy i nie byłoby
+      odtwarzalne, a odtwarzalność jest tu walutą.</td></tr>
+  <tr><td><strong>OpenStreetMap</strong></td>
+      <td>Ma właściwy tag <code>building:flats</code>, ale pokrycie jest znikome:
+      <strong>3 300 obiektów w całej Polsce</strong>, a w korytarzu wariantu A
+      dokładnie <strong>2</strong> — przy 1 164 adresach OSM na tym obszarze.</td></tr>
+</table>
+
+<div class="ramka">
+  <p><strong>W tych korytarzach to jednak nie waży.</strong> Wśród budynków
+  mieszkalnych w śladzie i nad tunelem nie ma <em>ani jednego</em>
+  czterokondygnacyjnego w żadnym z sześciu wariantów. Mediana powierzchni zabudowy
+  wynosi 108–123 m², a największy budynek mieszkalny ma 399 m². To zabudowa
+  jednorodzinna, więc przybliżenie „jeden budynek ≈ jedno gospodarstwo domowe”
+  się broni.</p>
+</div>
+
+<p class="przypis">Gdyby trasa kiedyś dotknęła zabudowy wielorodzinnej, jedyne
+realne drogi to pełny EGiB ze starostwa (ewidencja prowadzi lokale jako osobne
+obiekty; bezpłatna jest tylko geometria z podstawowymi atrybutami) albo wniosek
+do GUS o dane NOBC.</p>
+
+<h2 id="kontrole">4. Kontrole wyników<a class="kotwica" href="#kontrole">#</a></h2>
+
+<h3>Bufor źródłowy</h3>
+<p>Materiały konsultacyjne zawierają gotowy bufor 200 m wokół osi trasy,
+policzony przez ich autorów. Zliczenie adresów w tym buforze i porównanie
+z naszą kolumną „do 200 m” daje kontrolę niezależną od naszej metody:</p>
+
+<table>
+  <tr><th>wariant</th><th class="l">bufor źródłowy</th><th class="l">nasze ≤200 m</th><th class="l">różnica</th></tr>
+  <tr><td>A</td><td class="l">903</td><td class="l">902</td><td class="l">−0,11%</td></tr>
+  <tr><td>C</td><td class="l">908</td><td class="l">904</td><td class="l">−0,44%</td></tr>
+  <tr><td>E</td><td class="l">1495</td><td class="l">1493</td><td class="l">−0,13%</td></tr>
+</table>
+
+<h3>Kompletność adresów</h3>
+<p>Druga kontrola dotyczy tego, czy PRG nie gubi adresów. Zestawienie
+z OpenStreetMap dla korytarza wariantu A z pasem 200 m:</p>
+
+<table>
+  <tr><th>&nbsp;</th><th class="l">liczba</th></tr>
+  <tr><td>adresy PRG</td><td class="l">1289</td></tr>
+  <tr><td>adresy OSM</td><td class="l">1164</td></tr>
+  <tr><td>OSM bez odpowiednika w PRG (15 m)</td><td class="l">32 (3%)</td></tr>
+  <tr><td>PRG bez odpowiednika w OSM (15 m)</td><td class="l">183 (14%)</td></tr>
+</table>
+
+<p><strong>PRG jest zbiorem szerszym, nie węższym</strong> — zna 183 adresy
+nieobecne w OSM, a brakuje mu 32 znanych OSM-owi. Gdyby systematycznie gubił
+adresy, proporcja byłaby odwrotna. Te 32 to prawdopodobnie nowa zabudowa jeszcze
+nieujęta w rejestrze albo błędy w OSM; przy 1289 adresach mówimy o wpływie
+rzędu 2%.</p>
+
+<h2 id="zrodla">5. Źródła danych i licencja<a class="kotwica" href="#zrodla">#</a></h2>
+
+<table>
+  <tr><th>dane</th><th>źródło</th><th>warunki</th></tr>
+  <tr><td>punkty adresowe</td>
+      <td><a href="https://www.geoportal.gov.pl/pl/dane/panstwowy-rejestr-granic-prg/">PRG</a>, GUGiK</td>
+      <td>bezpłatnie, do dowolnego wykorzystania</td></tr>
+  <tr><td>obrysy budynków</td>
+      <td><a href="https://www.geoportal.gov.pl/pl/dane/ewidencja-gruntow-i-budynkow-egib/">EGiB</a>, GUGiK</td>
+      <td>geometria z podstawowymi atrybutami bezpłatnie, do dowolnego wykorzystania</td></tr>
+  <tr><td>warianty przebiegu</td>
+      <td>materiały konsultacji społecznych</td><td>—</td></tr>
+  <tr><td>podkład mapowy</td>
+      <td><a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a></td>
+      <td>ODbL</td></tr>
+</table>
+
+<p>Dane adresowe obejmują województwo małopolskie — 866 938 rekordów. Obrysy
+budynków pobrano dla wspólnego korytarza wszystkich wariantów poszerzonego
+o 200 m: 8 971 obiektów. Rocznik danych podaje opis wydania w repozytorium.</p>
+
+<p>Kod jest dostępny na licencji
+<a href="https://github.com/lechup/stop-s7/blob/main/LICENSE">AGPLv3</a>, więc
+każdy może sprawdzić, jak policzono te liczby, i uruchomić wyliczenie u siebie.
+Kto postawi zmodyfikowaną wersję tej strony, ma obowiązek udostępnić jej źródła
+— po to, żeby zmieniona metodologia nie mogła być pokazywana jako ta sama.</p>
+
+<footer>
+  <p>Pełny opis metody, kalibracja i kod:
+  <a href="https://github.com/lechup/stop-s7">github.com/lechup/stop-s7</a><br>
+  <a href="./">← wróć do mapy</a></p>
+</footer>
+
+</div>
+
+<script data-goatcounter="https://stop-s7.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>
