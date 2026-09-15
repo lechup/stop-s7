@@ -42,8 +42,12 @@
                                     width: 14px; }
   details.rodzaje[open] summary::before { content: "▾"; }
   details.rodzaje .lista { padding: 4px 0 2px; }
-  details.rodzaje label { display: flex; align-items: center; gap: 7px;
+  /* Etykieta ma DWA elementy flex: pole wyboru i cala tresc. Liczba musi
+     siedziec wewnatrz tresci, inaczej staje sie osobnym elementem flex
+     i odrywa sie do prawej krawedzi, a przy zawijaniu spada o linie nizej. */
+  details.rodzaje label { display: flex; align-items: baseline; gap: 7px;
                           padding: 2px 0; cursor: pointer; }
+  details.rodzaje label input { flex: none; }
   details.rodzaje .skroty { padding-top: 4px; }
   #wyniki { margin-top: 8px; }
   .trafienie { padding: 7px 8px; border: 1px solid var(--ramka); border-radius: 6px;
@@ -113,6 +117,16 @@
         <p class="info skroty">
           <a href="#" id="rodzaje-wszystkie">wszystkie</a> ·
           <a href="#" id="rodzaje-zadne">żadne</a></p>
+      </details>
+      <details class="rodzaje">
+        <summary id="podsumowanie-kondygnacji">kondygnacje: wszystkie</summary>
+        <div class="lista" id="lista-kondygnacji"></div>
+        <p class="info skroty">
+          <a href="#" id="kondygnacje-wszystkie">wszystkie</a> ·
+          <a href="#" id="kondygnacje-zadne">żadne</a></p>
+        <p class="uwaga">EGiB podaje liczbę kondygnacji nierówno — część
+        rekordów jej nie ma, a przy części usługa zwraca „brak uprawnień”,
+        bo darmowy dostęp nie obejmuje tego atrybutu.</p>
       </details>
       <label class="przelacznik"><input type="checkbox" data-warstwa="adresy" checked> adresy (PRG)</label>
     </div>
@@ -234,12 +248,44 @@ const BEZ_STREFY = "—";
 const podgrupy = {};   // warstwa -> strefa -> L.LayerGroup
 // Budynki dzielimy dodatkowo po rodzaju, zeby dalo sie ogladac same domy albo
 // sama oswiate — i zeby liczby w tabelce szly za tym wyborem.
-const grupyTypow = {};  // strefa -> rodzaj -> L.LayerGroup (wewnatrz podgrupy.budynki)
+// Budynki filtrujemy w dwoch wymiarach naraz (rodzaj i kondygnacje), wiec grupy
+// trzymamy pod kluczem zlozonym "rodzaj|kondygnacje" wewnatrz grupy strefy.
+// Trzy zagniezdzone poziomy grup byloby trudniej utrzymac, a efekt ten sam.
+const grupyBudynkow = {};  // strefa -> "rodzaj|kondygnacje" -> L.LayerGroup
 const RODZAJE_KOLEJNOSC = ["m", "k", "z", "h", "b", "g", "p", "t", "s", "i"];
-// Zbior zaznaczonych rodzajow. Pusty zbior znaczy "nic nie pokazuj" — to
-// swiadomy wybor uzytkownika, wiec nie traktujemy go jak "wszystko".
+const KONDYGNACJE_KOLEJNOSC = ["1", "2", "3", "4+", "brak uprawnień", "nieznana"];
+
+// Puste zbiory znacza "nic nie pokazuj" — to swiadomy wybor uzytkownika,
+// wiec nie traktujemy ich jak "wszystko".
 let typyWybrane = new Set();
-let typyZnane = new Set();   // rodzaje obecne w biezacym wariancie
+let typyZnane = new Set();
+let kondygnacjeWybrane = new Set();
+let kondygnacjeZnane = new Set();
+
+// EGiB podaje liczbe kondygnacji nierowno: 37% rekordow jej nie ma, a 17% niesie
+// doslowne "brak_uprawnien" — darmowa usluga WFS nie obejmuje tego atrybutu.
+// Rozdzielamy te dwa przypadki, bo znacza co innego: raz danych nie ma,
+// raz sa, ale nie dla nas.
+function kubelekKondygnacji(wartosc) {
+  if (wartosc === "brak_uprawnień" || wartosc === "brak_uprawnien") return "brak uprawnień";
+  const n = Number(wartosc);
+  if (!wartosc || !Number.isFinite(n) || n < 1) return "nieznana";
+  return n >= 4 ? "4+" : String(n);
+}
+
+function kluczBudynku(p) {
+  return (p.RODZAJ || "?") + "|" + kubelekKondygnacji(p.KONDYGNACJE_NADZIEMNE);
+}
+
+function rozbijKlucz(klucz) {
+  const i = klucz.indexOf("|");
+  return { rodzaj: klucz.slice(0, i), kondygnacje: klucz.slice(i + 1) };
+}
+
+function widocznyKlucz(klucz) {
+  const { rodzaj, kondygnacje } = rozbijKlucz(klucz);
+  return typyWybrane.has(rodzaj) && kondygnacjeWybrane.has(kondygnacje);
+}
 
 // Kolejnosc rysowania przez panes, a nie przez kolejnosc dodawania warstw:
 // przelaczanie stref zdejmuje i dodaje grupy z powrotem, co bez tego
@@ -270,112 +316,141 @@ function strefaWlaczona(strefa) {
   return !pole || pole.checked;
 }
 
-function odswiezTypy() {
-  for (const strefa of Object.keys(grupyTypow)) {
-    for (const [rodzaj, grupa] of Object.entries(grupyTypow[strefa])) {
-      if (typyWybrane.has(rodzaj)) podgrupy.budynki[strefa].addLayer(grupa);
+function odswiezWidocznoscBudynkow() {
+  for (const strefa of Object.keys(grupyBudynkow)) {
+    for (const [klucz, grupa] of Object.entries(grupyBudynkow[strefa])) {
+      if (widocznyKlucz(klucz)) podgrupy.budynki[strefa].addLayer(grupa);
       else podgrupy.budynki[strefa].removeLayer(grupa);
     }
   }
 }
 
 function liczbaBudynkow(strefa) {
-  // Nie mozna liczyc warstw w podgrupie strefy: siedza w niej grupy rodzajow,
+  // Nie mozna liczyc warstw w podgrupie strefy: siedza w niej grupy kluczy,
   // a nie pojedyncze budynki.
-  const wgRodzaju = grupyTypow[strefa] || {};
+  const grupy = grupyBudynkow[strefa] || {};
   let suma = 0;
-  for (const [rodzaj, grupa] of Object.entries(wgRodzaju)) {
-    if (typyWybrane.has(rodzaj)) suma += grupa.getLayers().length;
+  for (const [klucz, grupa] of Object.entries(grupy)) {
+    if (widocznyKlucz(klucz)) suma += grupa.getLayers().length;
   }
   return suma;
 }
 
-function policzRodzaje(tylkoWidoczneStrefy) {
+// Liczniki fasetowe: lista rodzajow pokazuje liczby z uwzglednieniem stref
+// i filtra kondygnacji, ale NIE samej siebie — inaczej odznaczenie pozycji
+// zerowaloby jej wlasna liczbe i nie dalo sie wrocic swiadomie.
+function policzWymiar(wymiar, tylkoWidoczneStrefy) {
   const licznik = {};
-  for (const strefa of Object.keys(grupyTypow)) {
+  for (const strefa of Object.keys(grupyBudynkow)) {
     if (tylkoWidoczneStrefy && !strefaWlaczona(strefa)) continue;
-    for (const [rodzaj, grupa] of Object.entries(grupyTypow[strefa])) {
-      licznik[rodzaj] = (licznik[rodzaj] || 0) + grupa.getLayers().length;
+    for (const [klucz, grupa] of Object.entries(grupyBudynkow[strefa])) {
+      const czesci = rozbijKlucz(klucz);
+      const drugi = wymiar === "rodzaj"
+        ? kondygnacjeWybrane.has(czesci.kondygnacje)
+        : typyWybrane.has(czesci.rodzaj);
+      if (tylkoWidoczneStrefy && !drugi) continue;
+      const k = czesci[wymiar];
+      licznik[k] = (licznik[k] || 0) + grupa.getLayers().length;
     }
   }
   return licznik;
 }
 
-// Liczby przy rodzajach musza isc za strefami — inaczej po odklikaniu strefy
-// 50-200 m lista dalej pokazywalaby "mieszkalny (1148)", choc na mapie zostalo
-// ich 347. Sama lista pozycji zostaje stabilna (budowana z pelnych liczb),
-// zeby rodzaj nie znikal, gdy akurat ma zero w widocznych strefach.
-function odswiezEtykietyRodzajow() {
-  const licznik = policzRodzaje(true);
-  document.querySelectorAll("[data-liczba-rodzaju]").forEach(element => {
-    const rodzaj = element.dataset.liczbaRodzaju;
-    element.textContent = (licznik[rodzaj] || 0).toLocaleString("pl-PL");
+function odswiezEtykietyBudynkow() {
+  const rodzaje = policzWymiar("rodzaj", true);
+  const kondygnacje = policzWymiar("kondygnacje", true);
+  document.querySelectorAll("[data-liczba-rodzaju]").forEach(e => {
+    e.textContent = (rodzaje[e.dataset.liczbaRodzaju] || 0).toLocaleString("pl-PL");
   });
-  odswiezPodsumowanieRodzajow();
+  document.querySelectorAll("[data-liczba-kondygnacji]").forEach(e => {
+    e.textContent = (kondygnacje[e.dataset.liczbaKondygnacji] || 0).toLocaleString("pl-PL");
+  });
+  odswiezPodsumowaniaBudynkow();
 }
 
-function odswiezPodsumowanieRodzajow() {
-  const licznik = policzRodzaje(true);
-  const wybrane = [...typyWybrane].filter(r => typyZnane.has(r));
-  // (licznik[r] || 0), bo rodzaj o zerowej liczbie w widocznych strefach
-  // w ogole nie trafia do licznika — bez tego suma wychodzi NaN.
-  const suma = wybrane.reduce((a, r) => a + (licznik[r] || 0), 0);
+function opisWyboru(wybrane, znane, licznik, jeden, wiele) {
+  const istotne = [...wybrane].filter(k => znane.has(k));
+  const suma = istotne.reduce((a, k) => a + (licznik[k] || 0), 0);
   let opis;
-  if (!wybrane.length) opis = "żaden";
-  else if (wybrane.length === typyZnane.size) opis = "wszystkie";
-  else if (wybrane.length === 1) opis = opisRodzaju(wybrane[0]);
-  // Polska odmiana: 2-4 "rodzaje", 5+ "rodzajów" (i 12-14 też "rodzajów").
+  if (!istotne.length) opis = "żaden";
+  else if (istotne.length === znane.size) opis = "wszystkie";
+  else if (istotne.length === 1) opis = jeden(istotne[0]);
   else {
-    const n = wybrane.length;
-    const dziesiatki = n % 100;
-    const koncowka = (n % 10 >= 2 && n % 10 <= 4 && (dziesiatki < 12 || dziesiatki > 14))
-      ? "rodzaje" : "rodzajów";
-    opis = n + " " + koncowka;
+    const n = istotne.length, d = n % 100;
+    opis = n + " " + ((n % 10 >= 2 && n % 10 <= 4 && (d < 12 || d > 14))
+      ? wiele[0] : wiele[1]);
   }
-  document.getElementById("podsumowanie-rodzajow").textContent =
-    "rodzaj: " + opis + " (" + suma.toLocaleString("pl-PL") + ")";
+  return opis + " (" + suma.toLocaleString("pl-PL") + ")";
 }
 
-function zbudujWyborTypu() {
-  const licznik = policzRodzaje(false);
-  const pierwszyRaz = typyZnane.size === 0;
-  typyZnane = new Set(Object.keys(licznik));
-  // Na starcie wszystko zaznaczone; przy zmianie wariantu zachowujemy wybor,
-  // dokladajac rodzaje, ktorych poprzedni wariant nie mial.
-  if (pierwszyRaz) typyWybrane = new Set(typyZnane);
+function odswiezPodsumowaniaBudynkow() {
+  document.getElementById("podsumowanie-rodzajow").textContent = "rodzaj: " +
+    opisWyboru(typyWybrane, typyZnane, policzWymiar("rodzaj", true),
+               opisRodzaju, ["rodzaje", "rodzajów"]);
+  document.getElementById("podsumowanie-kondygnacji").textContent = "kondygnacje: " +
+    opisWyboru(kondygnacjeWybrane, kondygnacjeZnane, policzWymiar("kondygnacje", true),
+               k => k, ["wartości", "wartości"]);
+}
 
-  const lista = document.getElementById("lista-rodzajow");
-  lista.innerHTML = "";
-  const pozostale = Object.keys(licznik).filter(r => !RODZAJE_KOLEJNOSC.includes(r));
-  for (const rodzaj of RODZAJE_KOLEJNOSC.concat(pozostale.sort())) {
-    if (!licznik[rodzaj]) continue;
-    const etykieta = document.createElement("label");
-    etykieta.innerHTML = '<input type="checkbox" data-rodzaj="' + rodzaj + '"' +
-      (typyWybrane.has(rodzaj) ? " checked" : "") + "> " +
-      opisRodzaju(rodzaj) + ' (<span data-liczba-rodzaju="' + rodzaj + '">' +
-      licznik[rodzaj].toLocaleString("pl-PL") + "</span>)";
-    etykieta.querySelector("input").addEventListener("change", (zdarzenie) => {
-      if (zdarzenie.target.checked) typyWybrane.add(rodzaj);
-      else typyWybrane.delete(rodzaj);
-      odswiezTypy();
+function zbudujListe(opcje) {
+  const { pojemnik, kolejnosc, licznik, wybrane, znane, atrybut, etykieta, zdarzenieNazwa } = opcje;
+  pojemnik.innerHTML = "";
+  const pozostale = Object.keys(licznik).filter(k => !kolejnosc.includes(k));
+  for (const klucz of kolejnosc.concat(pozostale.sort())) {
+    if (!licznik[klucz]) continue;
+    const wiersz = document.createElement("label");
+    const atrybutLiczby = atrybut === "rodzaj" ? "rodzaju" : "kondygnacji";
+    wiersz.innerHTML = '<input type="checkbox" data-' + atrybut + '="' + klucz + '"' +
+      (wybrane.has(klucz) ? " checked" : "") + "><span>" + etykieta(klucz) +
+      ' (<span data-liczba-' + atrybutLiczby + '="' + klucz + '">' +
+      licznik[klucz].toLocaleString("pl-PL") + "</span>)</span>";
+    wiersz.querySelector("input").addEventListener("change", (zdarz) => {
+      if (zdarz.target.checked) wybrane.add(klucz); else wybrane.delete(klucz);
+      odswiezWidocznoscBudynkow();
       odswiezLiczby();
-      odswiezPodsumowanieRodzajow();
-      zdarzenieZbiorcze("filtr-rodzaje", "Zawężenie rodzajem budynku");
+      odswiezEtykietyBudynkow();
+      zdarzenieZbiorcze(zdarzenieNazwa, "Zawężenie budynków");
     });
-    lista.appendChild(etykieta);
+    pojemnik.appendChild(wiersz);
   }
-  odswiezEtykietyRodzajow();
 }
 
-function ustawRodzaje(wszystkie) {
-  typyWybrane = wszystkie ? new Set(typyZnane) : new Set();
-  document.querySelectorAll("[data-rodzaj]").forEach(pole => {
-    pole.checked = wszystkie;
-  });
-  odswiezTypy();
+function zbudujWyborBudynkow() {
+  const pierwszyRaz = typyZnane.size === 0;
+  const rodzaje = policzWymiar("rodzaj", false);
+  const kondygnacje = policzWymiar("kondygnacje", false);
+  typyZnane = new Set(Object.keys(rodzaje));
+  kondygnacjeZnane = new Set(Object.keys(kondygnacje));
+  if (pierwszyRaz) {
+    typyWybrane = new Set(typyZnane);
+    kondygnacjeWybrane = new Set(kondygnacjeZnane);
+  }
+
+  zbudujListe({ pojemnik: document.getElementById("lista-rodzajow"),
+    kolejnosc: RODZAJE_KOLEJNOSC, licznik: rodzaje, wybrane: typyWybrane,
+    znane: typyZnane, atrybut: "rodzaj", etykieta: opisRodzaju,
+    zdarzenieNazwa: "filtr-rodzaje" });
+
+  zbudujListe({ pojemnik: document.getElementById("lista-kondygnacji"),
+    kolejnosc: KONDYGNACJE_KOLEJNOSC, licznik: kondygnacje, wybrane: kondygnacjeWybrane,
+    znane: kondygnacjeZnane, atrybut: "kondygnacje", etykieta: k => k,
+    zdarzenieNazwa: "filtr-kondygnacje" });
+
+  odswiezEtykietyBudynkow();
+}
+
+function ustawWybor(ktory, wszystkie) {
+  if (ktory === "rodzaj") {
+    typyWybrane = wszystkie ? new Set(typyZnane) : new Set();
+    document.querySelectorAll("[data-rodzaj]").forEach(p => { p.checked = wszystkie; });
+  } else {
+    kondygnacjeWybrane = wszystkie ? new Set(kondygnacjeZnane) : new Set();
+    document.querySelectorAll("[data-kondygnacje]").forEach(p => { p.checked = wszystkie; });
+  }
+  odswiezWidocznoscBudynkow();
   odswiezLiczby();
-  odswiezPodsumowanieRodzajow();
-  zdarzenieZbiorcze("filtr-rodzaje", "Zawężenie rodzajem budynku");
+  odswiezEtykietyBudynkow();
+  zdarzenieZbiorcze("filtr-" + ktory, "Zawężenie budynków");
 }
 
 // Liczby przy przelacznikach: ile obiektow jest w kazdej strefie i ile widac
@@ -509,7 +584,7 @@ async function pokazWariant(wariant) {
   Object.values(podgrupy).forEach(strefy =>
     Object.values(strefy).forEach(g => g.clearLayers()));
   // clearLayers usunelo podgrupy rodzajow razem z zawartoscia — zerujemy indeks.
-  Object.keys(grupyTypow).forEach(k => delete grupyTypow[k]);
+  Object.keys(grupyBudynkow).forEach(k => delete grupyBudynkow[k]);
 
   L.geoJSON(dane, {
     style: stylObiektu,
@@ -524,13 +599,13 @@ async function pokazWariant(wariant) {
       const nazwaWarstwy = obiekt.properties.warstwa;
       const strefa = strefaObiektu(obiekt.properties);
       if (nazwaWarstwy === "budynki") {
-        const rodzaj = obiekt.properties.RODZAJ || "?";
-        if (!grupyTypow[strefa]) grupyTypow[strefa] = {};
-        if (!grupyTypow[strefa][rodzaj]) {
-          grupyTypow[strefa][rodzaj] =
+        const klucz = kluczBudynku(obiekt.properties);
+        if (!grupyBudynkow[strefa]) grupyBudynkow[strefa] = {};
+        if (!grupyBudynkow[strefa][klucz]) {
+          grupyBudynkow[strefa][klucz] =
             L.layerGroup().addTo(podgrupy.budynki[strefa]);
         }
-        grupyTypow[strefa][rodzaj].addLayer(warstwa);
+        grupyBudynkow[strefa][klucz].addLayer(warstwa);
       } else {
         podgrupy[nazwaWarstwy][strefa].addLayer(warstwa);
       }
@@ -543,8 +618,8 @@ async function pokazWariant(wariant) {
     mapa.__dopasowano = true;
   }
   odswiezOpis();
-  zbudujWyborTypu();
-  odswiezTypy();
+  zbudujWyborBudynkow();
+  odswiezWidocznoscBudynkow();
   odswiezLiczby();
   zapiszStanUrl();
 }
@@ -673,7 +748,7 @@ STREFY_NAZWY.forEach((strefa, i) => {
     '<td class="liczba" data-liczba="adresy">–</td>' +
     '<td class="liczba" data-liczba="budynki">–</td>';
   wiersz.querySelector("input").addEventListener("change", () => {
-    odswiezStrefy(); odswiezLiczby(); odswiezEtykietyRodzajow();
+    odswiezStrefy(); odswiezLiczby(); odswiezEtykietyBudynkow();
     zdarzenieZbiorcze("filtr-strefy", "Zawężenie strefami");
   });
   pojemnikStref.appendChild(wiersz);
@@ -685,7 +760,7 @@ function ustawStrefy(wlaczone) {
   });
   odswiezStrefy();
   odswiezLiczby();
-  odswiezEtykietyRodzajow();
+  odswiezEtykietyBudynkow();
   zdarzenieZbiorcze("filtr-strefy", "Zawężenie strefami");
 }
 document.getElementById("tylko-slad").addEventListener("click", e => {
@@ -695,12 +770,14 @@ document.getElementById("wszystkie-strefy").addEventListener("click", e => {
   e.preventDefault(); ustawStrefy("wszystkie");
 });
 
-document.getElementById("rodzaje-wszystkie").addEventListener("click", e => {
-  e.preventDefault(); ustawRodzaje(true);
-});
-document.getElementById("rodzaje-zadne").addEventListener("click", e => {
-  e.preventDefault(); ustawRodzaje(false);
-});
+for (const [id, ktory, wszystkie] of [
+  ["rodzaje-wszystkie", "rodzaj", true], ["rodzaje-zadne", "rodzaj", false],
+  ["kondygnacje-wszystkie", "kondygnacje", true], ["kondygnacje-zadne", "kondygnacje", false],
+]) {
+  document.getElementById(id).addEventListener("click", e => {
+    e.preventDefault(); ustawWybor(ktory, wszystkie);
+  });
+}
 
 document.querySelectorAll("[data-warstwa]").forEach(pole => {
   pole.addEventListener("change", () => {

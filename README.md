@@ -286,9 +286,19 @@ we wszystkich strefach do 200 m, a każdą strefę da się osobno odkliknąć
 (skróty `tylko ślad` i `wszystkie`), żeby odsiać tło i zobaczyć sam pas zajęcia
 terenu.
 
-Budynki da się zawęzić do wybranych rodzajów z EGiB — zwijana lista pod
-przełącznikiem warstwy, z liczbą obiektów przy każdej pozycji i skrótami
-`wszystkie` / `żadne`. Zaznaczyć można dowolną kombinację, a wybór działa
+Budynki da się zawęzić w **dwóch wymiarach naraz** — po rodzaju z EGiB
+i po liczbie kondygnacji nadziemnych. Dwie zwijane listy pod przełącznikiem
+warstwy, z liczbą obiektów przy każdej pozycji i skrótami `wszystkie` / `żadne`.
+Liczniki są fasetowe: lista rodzajów pokazuje liczby z uwzględnieniem stref
+i filtra kondygnacji, ale nie samej siebie — inaczej odznaczenie pozycji
+zerowałoby jej własną liczbę.
+
+Filtr kondygnacji ma kubełki `1`, `2`, `3`, `4+` oraz dwa osobne na braki:
+**`brak uprawnień`** i **`nieznana`**. To rozróżnienie jest istotne, bo znaczą
+co innego — przy 17% budynków usługa WFS zwraca dosłowne `brak_uprawnień`
+(atrybut istnieje, ale darmowy dostęp go nie obejmuje), a przy 37% wartości
+po prostu nie ma. Razem daje to ponad połowę budynków bez użytecznej liczby
+kondygnacji i strona mówi o tym wprost. Zaznaczyć można dowolną kombinację, a wybór działa
 jednocześnie na mapę i na statystyki: można obejrzeć same domy mieszkalne,
 albo mieszkalne razem z oświatą i opieką zdrowotną. Wybór przeżywa zmianę
 wariantu.
