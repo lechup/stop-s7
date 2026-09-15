@@ -197,6 +197,29 @@ razem z szopami i wiatami, podobnie kościoły, poczty czy świetlice. Żeby je
 wyodrębnić, trzeba drugiego źródła (OpenStreetMap albo BDOT10k, który ma funkcje
 budynków i nazwy własne). Raport ich nie wskazuje i nie udaje, że potrafi.
 
+### Mieszkania, a nie budynki — czego nie wiemy
+
+Raport liczy **punkty adresowe i budynki**, nie gospodarstwa domowe. Blok
+z pięćdziesięcioma mieszkaniami byłby tu jednym budynkiem i jednym adresem.
+Sprawdziliśmy trzy możliwe źródła liczby mieszkań i żadne nie nadaje się do
+użycia:
+
+| źródło | dlaczego odpada |
+|---|---|
+| **NOBC** (rejestr TERYT, GUS) | formalnie obejmuje budynki *i mieszkania*, ale nie jest publiczny — bezpłatnie GUS udostępnia tylko TERC, SIMC i ULIC; NOBC wymaga wniosku, a dla podmiotów spoza wyłączeń ustawowych może być odpłatny |
+| **bazy adresowe firm kurierskich** | własnościowe i niepublikowane, a przy tym pochodne od PRG/EMUiA — nie są niezależnym źródłem, a pobieranie ich łamałoby regulaminy i nie byłoby odtwarzalne |
+| **OpenStreetMap** | ma właściwy tag `building:flats`, ale pokrycie jest znikome: **3 300 obiektów w całej Polsce**, a w korytarzu wariantu A dokładnie **2** (przy 1 164 adresach w OSM na tym obszarze) |
+
+**W tych korytarzach to jednak nie ma znaczenia.** Wśród budynków mieszkalnych
+w śladzie i nad tunelem nie ma ani jednego czterokondygnacyjnego w żadnym
+wariancie; mediana powierzchni zabudowy to 108–123 m², a największy budynek
+mieszkalny ma 399 m². To zabudowa jednorodzinna, więc przybliżenie „jeden
+budynek ≈ jedno gospodarstwo domowe" się broni.
+
+Gdyby trasa kiedyś dotknęła zabudowy wielorodzinnej, jedyne realne drogi to
+pełny EGiB ze starostwa (ewidencja prowadzi lokale jako osobne obiekty; bezpłatna
+jest tylko geometria z podstawowymi atrybutami) albo wniosek do GUS o NOBC.
+
 ## Sprawdzanie pojedynczego adresu
 
 ```bash
@@ -234,6 +257,21 @@ daje niezależną kontrolę:
 | E | 1495 | 1493 | −0,13% |
 
 Kontrolę odpala `functions.kontrola(wariant)`.
+
+Druga kontrola dotyczy kompletności samych adresów. Zestawienie PRG
+z OpenStreetMap dla korytarza wariantu A + 200 m:
+
+| | liczba |
+|---|---|
+| adresy PRG | 1289 |
+| adresy OSM | 1164 |
+| OSM bez odpowiednika w PRG (15 m) | 32 (3%) |
+| PRG bez odpowiednika w OSM (15 m) | 183 (14%) |
+
+**PRG jest zbiorem szerszym, nie węższym** — zna 183 adresy nieobecne w OSM,
+a brakuje mu 32 znanych OSM-owi. Gdyby systematycznie gubił adresy, proporcja
+byłaby odwrotna. Te 32 to prawdopodobnie nowa zabudowa jeszcze nieujęta
+w rejestrze albo błędy w OSM; przy 1289 adresach mówimy o wpływie rzędu 2%.
 
 ## Mapa online
 
