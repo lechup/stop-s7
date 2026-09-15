@@ -290,9 +290,10 @@ function liczbaBudynkow(strefa) {
   return suma;
 }
 
-function policzRodzaje() {
+function policzRodzaje(tylkoWidoczneStrefy) {
   const licznik = {};
   for (const strefa of Object.keys(grupyTypow)) {
+    if (tylkoWidoczneStrefy && !strefaWlaczona(strefa)) continue;
     for (const [rodzaj, grupa] of Object.entries(grupyTypow[strefa])) {
       licznik[rodzaj] = (licznik[rodzaj] || 0) + grupa.getLayers().length;
     }
@@ -300,9 +301,25 @@ function policzRodzaje() {
   return licznik;
 }
 
-function odswiezPodsumowanieRodzajow(licznik) {
-  const wybrane = [...typyWybrane].filter(r => licznik[r]);
-  const suma = wybrane.reduce((a, r) => a + licznik[r], 0);
+// Liczby przy rodzajach musza isc za strefami — inaczej po odklikaniu strefy
+// 50-200 m lista dalej pokazywalaby "mieszkalny (1148)", choc na mapie zostalo
+// ich 347. Sama lista pozycji zostaje stabilna (budowana z pelnych liczb),
+// zeby rodzaj nie znikal, gdy akurat ma zero w widocznych strefach.
+function odswiezEtykietyRodzajow() {
+  const licznik = policzRodzaje(true);
+  document.querySelectorAll("[data-liczba-rodzaju]").forEach(element => {
+    const rodzaj = element.dataset.liczbaRodzaju;
+    element.textContent = (licznik[rodzaj] || 0).toLocaleString("pl-PL");
+  });
+  odswiezPodsumowanieRodzajow();
+}
+
+function odswiezPodsumowanieRodzajow() {
+  const licznik = policzRodzaje(true);
+  const wybrane = [...typyWybrane].filter(r => typyZnane.has(r));
+  // (licznik[r] || 0), bo rodzaj o zerowej liczbie w widocznych strefach
+  // w ogole nie trafia do licznika — bez tego suma wychodzi NaN.
+  const suma = wybrane.reduce((a, r) => a + (licznik[r] || 0), 0);
   let opis;
   if (!wybrane.length) opis = "żaden";
   else if (wybrane.length === typyZnane.size) opis = "wszystkie";
@@ -320,7 +337,7 @@ function odswiezPodsumowanieRodzajow(licznik) {
 }
 
 function zbudujWyborTypu() {
-  const licznik = policzRodzaje();
+  const licznik = policzRodzaje(false);
   const pierwszyRaz = typyZnane.size === 0;
   typyZnane = new Set(Object.keys(licznik));
   // Na starcie wszystko zaznaczone; przy zmianie wariantu zachowujemy wybor,
@@ -335,18 +352,19 @@ function zbudujWyborTypu() {
     const etykieta = document.createElement("label");
     etykieta.innerHTML = '<input type="checkbox" data-rodzaj="' + rodzaj + '"' +
       (typyWybrane.has(rodzaj) ? " checked" : "") + "> " +
-      opisRodzaju(rodzaj) + " (" + licznik[rodzaj].toLocaleString("pl-PL") + ")";
+      opisRodzaju(rodzaj) + ' (<span data-liczba-rodzaju="' + rodzaj + '">' +
+      licznik[rodzaj].toLocaleString("pl-PL") + "</span>)";
     etykieta.querySelector("input").addEventListener("change", (zdarzenie) => {
       if (zdarzenie.target.checked) typyWybrane.add(rodzaj);
       else typyWybrane.delete(rodzaj);
       odswiezTypy();
       odswiezLiczby();
-      odswiezPodsumowanieRodzajow(policzRodzaje());
+      odswiezPodsumowanieRodzajow();
       zdarzenieZbiorcze("filtr-rodzaje", "Zawężenie rodzajem budynku");
     });
     lista.appendChild(etykieta);
   }
-  odswiezPodsumowanieRodzajow(licznik);
+  odswiezEtykietyRodzajow();
 }
 
 function ustawRodzaje(wszystkie) {
@@ -356,7 +374,7 @@ function ustawRodzaje(wszystkie) {
   });
   odswiezTypy();
   odswiezLiczby();
-  odswiezPodsumowanieRodzajow(policzRodzaje());
+  odswiezPodsumowanieRodzajow();
   zdarzenieZbiorcze("filtr-rodzaje", "Zawężenie rodzajem budynku");
 }
 
@@ -655,7 +673,7 @@ STREFY_NAZWY.forEach((strefa, i) => {
     '<td class="liczba" data-liczba="adresy">–</td>' +
     '<td class="liczba" data-liczba="budynki">–</td>';
   wiersz.querySelector("input").addEventListener("change", () => {
-    odswiezStrefy(); odswiezLiczby();
+    odswiezStrefy(); odswiezLiczby(); odswiezEtykietyRodzajow();
     zdarzenieZbiorcze("filtr-strefy", "Zawężenie strefami");
   });
   pojemnikStref.appendChild(wiersz);
@@ -667,6 +685,7 @@ function ustawStrefy(wlaczone) {
   });
   odswiezStrefy();
   odswiezLiczby();
+  odswiezEtykietyRodzajow();
   zdarzenieZbiorcze("filtr-strefy", "Zawężenie strefami");
 }
 document.getElementById("tylko-slad").addEventListener("click", e => {
