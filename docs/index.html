@@ -257,9 +257,9 @@ const KONDYGNACJE_KOLEJNOSC = ["1", "2", "3", "4+", "brak uprawnień", "nieznana
 
 // Puste zbiory znacza "nic nie pokazuj" — to swiadomy wybor uzytkownika,
 // wiec nie traktujemy ich jak "wszystko".
-let typyWybrane = new Set();
+const typyWybrane = new Set();
 let typyZnane = new Set();
-let kondygnacjeWybrane = new Set();
+const kondygnacjeWybrane = new Set();
 let kondygnacjeZnane = new Set();
 
 // EGiB podaje liczbe kondygnacji nierowno: 37% rekordow jej nie ma, a 17% niesie
@@ -422,8 +422,8 @@ function zbudujWyborBudynkow() {
   typyZnane = new Set(Object.keys(rodzaje));
   kondygnacjeZnane = new Set(Object.keys(kondygnacje));
   if (pierwszyRaz) {
-    typyWybrane = new Set(typyZnane);
-    kondygnacjeWybrane = new Set(kondygnacjeZnane);
+    podmien(typyWybrane, typyZnane);
+    podmien(kondygnacjeWybrane, kondygnacjeZnane);
   }
 
   zbudujListe({ pojemnik: document.getElementById("lista-rodzajow"),
@@ -439,12 +439,21 @@ function zbudujWyborBudynkow() {
   odswiezEtykietyBudynkow();
 }
 
+// UWAGA: zbiory wyboru modyfikujemy W MIEJSCU i nigdy nie podmieniamy na nowe.
+// Obsluga pol wyboru trzyma referencje do zbioru w domknieciu, wiec podmiana
+// zostawia ja przy osieroconym obiekcie: pole daje sie zaznaczyc, ale liczenie
+// czyta juz inny zbior i wszedzie wychodzi zero.
+function podmien(zbior, wartosci) {
+  zbior.clear();
+  wartosci.forEach(w => zbior.add(w));
+}
+
 function ustawWybor(ktory, wszystkie) {
   if (ktory === "rodzaj") {
-    typyWybrane = wszystkie ? new Set(typyZnane) : new Set();
+    podmien(typyWybrane, wszystkie ? typyZnane : []);
     document.querySelectorAll("[data-rodzaj]").forEach(p => { p.checked = wszystkie; });
   } else {
-    kondygnacjeWybrane = wszystkie ? new Set(kondygnacjeZnane) : new Set();
+    podmien(kondygnacjeWybrane, wszystkie ? kondygnacjeZnane : []);
     document.querySelectorAll("[data-kondygnacje]").forEach(p => { p.checked = wszystkie; });
   }
   odswiezWidocznoscBudynkow();
