@@ -259,8 +259,18 @@ Przy każdej strefie stoi liczba adresów i budynków, a pod spodem suma tego, c
 aktualnie widać na mapie — reagująca na odklikanie strefy, wybór rodzaju
 budynku i wyłączenie całej warstwy. Liczby zgadzają się z `podsumowanie.csv`, więc tabelka w panelu jest
 jednocześnie legendą i kontrolą. Widok zapisuje się
-w adresie URL (`#C/17/49.9454/19.9742`), więc da się podesłać komuś link
-prosto na jego ulicę.
+w adresie URL (`#C/17/49.9454/19.9742`), a po sprawdzeniu adresu dochodzi
+piąty segment z samym adresem:
+
+```
+#A/17/49.9914/19.9833/Juliusza%20Osterwy%7C41P%7CKrak%C3%B3w
+```
+
+Otwarcie takiego linku odtwarza komplet: wypełnia pole wyszukiwania, stawia
+znacznik i rozwija tabelkę z odległościami we wszystkich wariantach. Dzięki temu
+udostępnia się nie „mapę gdzieś w okolicy", tylko konkretną odpowiedź na pytanie
+„co z tym domem". Starsze linki bez tego segmentu działają jak dotąd, a gdy
+adresu nie ma już w danych, strona mówi to wprost zamiast pokazać gołą mapę.
 
 Dane generuje [eksport_web.py](eksport_web.py):
 
@@ -312,6 +322,7 @@ Poza odsłonami liczone są zdarzenia:
 | `wyszukiwanie-bez-wyniku` | zapytanie nic nie znalazło — dużo takich znaczy, że promień indeksu (500 m) jest za mały albo ludzie pytają spoza obszaru |
 | `sprawdzenie-adresu` | ktoś kliknął wynik, czyli faktycznie sprawdził swój adres |
 | `wariant-X` | świadome przełączenie wariantu (wczytanie strony się nie liczy) |
+| `adres-z-linku` | ktoś wszedł z linku niosącego adres — miara tego, czy udostępnianie działa |
 | `filtr-strefy` | zawężenie strefami |
 | `filtr-rodzaje` | zawężenie rodzajem budynku |
 | `filtr-warstwy` | przełączenie warstwy |

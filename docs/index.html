@@ -204,11 +204,19 @@ let indeksWczytywany = null;
 // Widok w adresie URL: #A/15/49.9512/19.9321 — zeby dalo sie podeslac komus
 // link prosto na swoja ulice.
 function zStanuUrl() {
-  const m = /^#([A-F])\/(\d+(?:\.\d+)?)\/(-?\d+\.?\d*)\/(-?\d+\.?\d*)$/
+  // Piaty segment (adres) jest opcjonalny — starsze linki bez niego dzialaja.
+  const m = /^#([A-F])\/(\d+(?:\.\d+)?)\/(-?\d+\.?\d*)\/(-?\d+\.?\d*)(?:\/(.+))?$/
     .exec(location.hash);
   if (!m) return null;
   return { wariant: m[1], zoom: parseFloat(m[2]),
-           srodek: [parseFloat(m[3]), parseFloat(m[4])] };
+           srodek: [parseFloat(m[3]), parseFloat(m[4])],
+           adres: m[5] ? decodeURIComponent(m[5]) : null };
+}
+
+// Klucz adresu w linku: ulica|numer|miejscowosc. Wystarczy do jednoznacznego
+// odnalezienia wpisu, a przy okazji jest czytelny dla czlowieka w pasku adresu.
+function kluczAdresu(wiersz) {
+  return [wiersz[0], wiersz[1], wiersz[2]].join("|");
 }
 const stanStartowy = zStanuUrl();
 
@@ -555,6 +563,30 @@ function tabelaDlaAdresu(wiersz) {
   return html + "</table>";
 }
 
+function elementTrafienia(wiersz) {
+  const element = document.createElement("div");
+  element.className = "trafienie";
+  const tytul = [wiersz[0], wiersz[1]].filter(Boolean).join(" ") || wiersz[1];
+  element.innerHTML = "<strong>" + tytul + "</strong><br>" +
+    '<span class="info">' + [wiersz[3], wiersz[2]].filter(Boolean).join(" ") + "</span>";
+  element.addEventListener("click", () => {
+    zdarzenie("sprawdzenie-adresu", "Sprawdzenie adresu");
+    wybierzAdres(wiersz, element, true);
+  });
+  return element;
+}
+
+function wybierzAdres(wiersz, element, przesunMape) {
+  document.querySelectorAll(".trafienie .strefy").forEach(t => t.remove());
+  element.insertAdjacentHTML("beforeend", tabelaDlaAdresu(wiersz));
+  znacznikSzukania.clearLayers();
+  L.circleMarker([wiersz[5], wiersz[4]], { radius: 9, color: "#1a5fb4", weight: 3,
+    fillColor: "#1a5fb4", fillOpacity: 0.25 }).addTo(znacznikSzukania);
+  if (przesunMape) mapa.setView([wiersz[5], wiersz[4]], 17);
+  adresWybrany = wiersz;
+  zapiszStanUrl();
+}
+
 let czasomierz = null;
 document.getElementById("szukaj").addEventListener("input", (zdarzenie) => {
   clearTimeout(czasomierz);
@@ -563,7 +595,13 @@ document.getElementById("szukaj").addEventListener("input", (zdarzenie) => {
 
 async function szukaj(zapytanie) {
   const pojemnik = document.getElementById("wyniki");
-  if (zapytanie.length < 3) { pojemnik.innerHTML = ""; return; }
+  if (zapytanie.length < 3) {
+    pojemnik.innerHTML = "";
+    znacznikSzukania.clearLayers();
+    adresWybrany = null;
+    zapiszStanUrl();
+    return;
+  }
   pojemnik.innerHTML = '<p class="info">Szukam…</p>';
   await wczytajIndeks();
 
@@ -591,23 +629,7 @@ async function szukaj(zapytanie) {
   }
 
   pojemnik.innerHTML = "";
-  trafienia.forEach(w => {
-    const element = document.createElement("div");
-    element.className = "trafienie";
-    const tytul = [w[0], w[1]].filter(Boolean).join(" ") || w[1];
-    element.innerHTML = "<strong>" + tytul + "</strong><br>" +
-      '<span class="info">' + [w[3], w[2]].filter(Boolean).join(" ") + "</span>";
-    element.addEventListener("click", () => {
-      zdarzenie("sprawdzenie-adresu", "Sprawdzenie adresu");
-      document.querySelectorAll(".trafienie .strefy").forEach(t => t.remove());
-      element.insertAdjacentHTML("beforeend", tabelaDlaAdresu(w));
-      znacznikSzukania.clearLayers();
-      L.circleMarker([w[5], w[4]], { radius: 9, color: "#1a5fb4", weight: 3,
-        fillColor: "#1a5fb4", fillOpacity: 0.25 }).addTo(znacznikSzukania);
-      mapa.setView([w[5], w[4]], 17);
-    });
-    pojemnik.appendChild(element);
-  });
+  trafienia.forEach(w => pojemnik.appendChild(elementTrafienia(w)));
 }
 
 const pojemnikWariantow = document.getElementById("warianty");
@@ -670,10 +692,14 @@ document.querySelectorAll("[data-warstwa]").forEach(pole => {
   });
 });
 
+let adresWybrany = null;
+
 function zapiszStanUrl() {
   const s = mapa.getCenter();
-  history.replaceState(null, "", "#" + wariantAktywny + "/" + mapa.getZoom() +
-    "/" + s.lat.toFixed(4) + "/" + s.lng.toFixed(4));
+  let hash = "#" + wariantAktywny + "/" + mapa.getZoom() +
+    "/" + s.lat.toFixed(4) + "/" + s.lng.toFixed(4);
+  if (adresWybrany) hash += "/" + encodeURIComponent(kluczAdresu(adresWybrany));
+  history.replaceState(null, "", hash);
 }
 mapa.on("moveend", zapiszStanUrl);
 
@@ -683,7 +709,30 @@ mapa.on("zoomend", () => {
     g.eachLayer(w => { if (w.setRadius) w.setRadius(r); }));
 });
 
+async function odtworzAdresZLinku(klucz) {
+  await wczytajIndeks();
+  const wiersz = indeks.adresy.find(w => kluczAdresu(w) === klucz);
+  const pojemnik = document.getElementById("wyniki");
+  if (!wiersz) {
+    // Link moze pochodzic ze starszego rocznika danych — mowimy o tym wprost,
+    // zamiast cicho pokazac mape bez adresu.
+    pojemnik.innerHTML = '<p class="info">Nie znalazłem adresu z linku (' +
+      klucz.split("|").filter(Boolean).join(" ") + '). Dane adresowe mogły się ' +
+      'zmienić — spróbuj wyszukać go ręcznie.</p>';
+    return;
+  }
+  document.getElementById("szukaj").value =
+    [wiersz[0], wiersz[1]].filter(Boolean).join(" ") || wiersz[1];
+  const element = elementTrafienia(wiersz);
+  pojemnik.innerHTML = "";
+  pojemnik.appendChild(element);
+  // Nie przesuwamy mapy: widok z linku jest nadrzedny, bo autor go wybral.
+  wybierzAdres(wiersz, element, false);
+  zdarzenie("adres-z-linku", "Wejście z linku z adresem");
+}
+
 pokazWariant(stanStartowy ? stanStartowy.wariant : "A");
+if (stanStartowy && stanStartowy.adres) odtworzAdresZLinku(stanStartowy.adres);
 </script>
 
 <!-- GoatCounter: bez ciasteczek, bez danych identyfikujacych, bez banera zgody.
