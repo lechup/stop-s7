@@ -286,6 +286,14 @@ we wszystkich strefach do 200 m, a każdą strefę da się osobno odkliknąć
 (skróty `tylko ślad` i `wszystkie`), żeby odsiać tło i zobaczyć sam pas zajęcia
 terenu.
 
+Poza korytarzem, budynkami i adresami mapa pokazuje dwie warstwy terenowe:
+**działki zajęte** (te przecinające korytarz, czyli dokładnie te, które raport
+liczy) oraz **osuwiska i tereny zalewowe**, przycięte do 500 m od korytarza.
+Obie są domyślnie wyłączone, a działki wczytują się dopiero po włączeniu —
+ważą tyle co reszta wariantu razem wzięta, a do pytania „czy mój dom jest
+zajęty" nie są potrzebne. Bez tego wejście na stronę kosztowałoby 460 kB
+zamiast 216 kB, co na telefonie jest odczuwalne.
+
 Budynki da się zawęzić w **dwóch wymiarach naraz** — po rodzaju z EGiB
 i po liczbie kondygnacji nadziemnych. Dwie zwijane listy pod przełącznikiem
 warstwy, z liczbą obiektów przy każdej pozycji i skrótami `wszystkie` / `żadne`.
@@ -335,7 +343,8 @@ Dane generuje [eksport_web.py](eksport_web.py):
 | plik | zawartość | po gzipie |
 |---|---|---|
 | `docs/dane/wariant-X.geojson` | korytarz, budynki i adresy jednego wariantu | 40–58 kB |
-| `docs/dane/adresy-index.json` | 13 641 adresów z odległością do każdego wariantu | 356 kB |
+| `docs/dane/wariant-X-dzialki.geojson` | działki przecinające korytarz, wczytywane leniwie | 200–260 kB |
+| `docs/dane/adresy-index.json` | 13 924 adresy z odległością do każdego wariantu | 362 kB |
 
 Całość waży 662 kB po kompresji, więc nie ma po co sięgać po kafelki wektorowe —
 przeglądarka bierze zwykły GeoJSON, a Pages sam serwuje gzip. Indeks wyszukiwarki

@@ -10,6 +10,7 @@
   :root {
     --tlo: #f7f7f5; --panel: #fff; --tekst: #1a1a1a; --przygasly: #5f6368;
     --ramka: #d8d8d4; --akcent: #1a5fb4;
+    --dzialki: #7a7a75; --osuwisko: #a51d2d; --powodz: #1c71d8; --chronione: #26a269;
     --slad: #c01c28; --tunel: #e66100; --s20: #f5c211; --s30: #99c1f1;
     --s50: #62a0ea; --s200: #b5cee4;
   }
@@ -127,6 +128,8 @@
         bo darmowy dostęp nie obejmuje tego atrybutu.</p>
       </details>
       <label class="przelacznik"><input type="checkbox" data-warstwa="adresy" checked> adresy (PRG)</label>
+      <label class="przelacznik"><input type="checkbox" data-warstwa="dzialki"> działki zajęte<span id="licznik-dzialek" class="uwaga"></span></label>
+      <label class="przelacznik"><input type="checkbox" data-warstwa="teren"> osuwiska i tereny zalewowe</label>
     </div>
 
     <div class="sekcja">
@@ -289,13 +292,15 @@ function widocznyKlucz(klucz) {
 // przelaczanie stref zdejmuje i dodaje grupy z powrotem, co bez tego
 // wypychaloby wlasnie wlaczona warstwe na wierzch. Adresy musza byc nad
 // budynkami, inaczej klikniecie w punkt trafia w obrys pod nim.
-const KOLEJNOSC = { korytarz: 410, budynki: 450, adresy: 490 };
+const KOLEJNOSC = { teren: 395, dzialki: 400, korytarz: 410, budynki: 450, adresy: 490 };
 for (const [nazwa, zindex] of Object.entries(KOLEJNOSC)) {
   mapa.createPane("pane-" + nazwa).style.zIndex = zindex;
 }
+const DOMYSLNIE_WYLACZONE = new Set(["dzialki", "teren"]);
 
-for (const nazwa of ["korytarz", "budynki", "adresy"]) {
-  warstwyMapy[nazwa] = L.layerGroup().addTo(mapa);
+for (const nazwa of ["teren", "dzialki", "korytarz", "budynki", "adresy"]) {
+  warstwyMapy[nazwa] = L.layerGroup();
+  if (!DOMYSLNIE_WYLACZONE.has(nazwa)) warstwyMapy[nazwa].addTo(mapa);
   podgrupy[nazwa] = {};
   // Korytarz nie ma stref, ale trzymamy go w tej samej strukturze, zeby
   // przelaczanie dzialalo jednolicie.
@@ -528,8 +533,21 @@ function promienPunktu() {
   return z >= 16 ? 7 : z >= 14 ? 5.5 : z >= 12 ? 4 : 3;
 }
 
+const BARWY_TERENU = {
+  osuwiska: "#a51d2d", ruchy_masowe: "#c64600",
+  powodz: "#1c71d8", chronione: "#26a269",
+};
+
 function stylObiektu(obiekt) {
   const p = obiekt.properties;
+  if (p.warstwa === "dzialki") {
+    return { pane: "pane-dzialki", color: "#5f5f5a", weight: 0.7, opacity: 0.8,
+             fill: true, fillColor: "#7a7a75", fillOpacity: 0.06 };
+  }
+  if (BARWY_TERENU[p.warstwa]) {
+    return { pane: "pane-teren", color: BARWY_TERENU[p.warstwa], weight: 1,
+             fillColor: BARWY_TERENU[p.warstwa], fillOpacity: 0.18 };
+  }
   const pane = "pane-" + p.warstwa;
   if (p.warstwa === "korytarz") {
     const tunel = p.rodzaj === "tunel";
@@ -538,6 +556,14 @@ function stylObiektu(obiekt) {
     return { pane: pane, color: tunel ? BARWY_HEX[2] : BARWY_HEX[1], weight: 2.5,
              opacity: 0.95, fillColor: tunel ? BARWY_HEX[2] : BARWY_HEX[1],
              fillOpacity: 0.35 };
+  }
+  if (p.warstwa === "dzialki") {
+    return "<strong>Działka ewidencyjna</strong><br>" +
+      '<span class="uwaga">przecięta przez korytarz wariantu ' + wariantAktywny + "</span>";
+  }
+  if (BARWY_TERENU[p.warstwa]) {
+    return "<strong>" + (p.opis || p.warstwa) + "</strong><br>" +
+      '<span class="uwaga">materiały STEŚ</span>';
   }
   if (p.warstwa === "budynki") {
     const kod = kodStrefyZNazwy(p.strefa);
@@ -592,6 +618,10 @@ async function pokazWariant(wariant) {
     Object.values(strefy).forEach(g => g.clearLayers()));
   // clearLayers usunelo podgrupy rodzajow razem z zawartoscia — zerujemy indeks.
   Object.keys(grupyBudynkow).forEach(k => delete grupyBudynkow[k]);
+  Object.keys(dzialkiWczytane).forEach(k => delete dzialkiWczytane[k]);
+  const polaDzialek = document.querySelector('[data-warstwa="dzialki"]');
+  if (polaDzialek && polaDzialek.checked) wczytajDzialki(wariant);
+  else document.getElementById("licznik-dzialek").textContent = "";
 
   L.geoJSON(dane, {
     style: stylObiektu,
@@ -603,7 +633,8 @@ async function pokazWariant(wariant) {
     }),
     onEachFeature: (obiekt, warstwa) => {
       warstwa.bindPopup(opisObiektu(obiekt.properties));
-      const nazwaWarstwy = obiekt.properties.warstwa;
+      let nazwaWarstwy = obiekt.properties.warstwa;
+      if (BARWY_TERENU[nazwaWarstwy]) nazwaWarstwy = "teren";
       const strefa = strefaObiektu(obiekt.properties);
       if (nazwaWarstwy === "budynki") {
         const klucz = kluczBudynku(obiekt.properties);
@@ -783,10 +814,40 @@ for (const [id, ktory, wszystkie] of [
   });
 }
 
+// Dzialki wazą tyle co reszta wariantu razem wzieta, a do pytania "czy moj dom
+// jest zajety" nie sa potrzebne — wczytujemy je dopiero, gdy ktos je wlaczy.
+const dzialkiWczytane = {};
+
+async function wczytajDzialki(wariant) {
+  if (dzialkiWczytane[wariant]) return;
+  dzialkiWczytane[wariant] = true;
+  const licznik = document.getElementById("licznik-dzialek");
+  licznik.textContent = " — wczytuję…";
+  try {
+    const odpowiedz = await fetch("dane/wariant-" + wariant + "-dzialki.geojson");
+    if (!odpowiedz.ok) throw new Error(odpowiedz.status);
+    const dane = await odpowiedz.json();
+    L.geoJSON(dane, {
+      style: stylObiektu,
+      onEachFeature: (obiekt, warstwa) => {
+        warstwa.bindPopup(opisObiektu(obiekt.properties));
+        podgrupy.dzialki[BEZ_STREFY].addLayer(warstwa);
+      },
+    });
+    licznik.textContent = " — " + dane.features.length.toLocaleString("pl-PL");
+  } catch (blad) {
+    dzialkiWczytane[wariant] = false;
+    licznik.textContent = " — nie udało się wczytać";
+  }
+}
+
 document.querySelectorAll("[data-warstwa]").forEach(pole => {
   pole.addEventListener("change", () => {
     const warstwa = warstwyMapy[pole.dataset.warstwa];
     if (pole.checked) mapa.addLayer(warstwa); else mapa.removeLayer(warstwa);
+    if (pole.dataset.warstwa === "dzialki" && pole.checked) {
+      wczytajDzialki(wariantAktywny);
+    }
     odswiezLiczby();
     zdarzenieZbiorcze("filtr-warstwy", "Przełączenie warstwy");
   });

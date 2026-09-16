@@ -73,6 +73,70 @@ def tekst(wartosc):
   return str(wartosc)
 
 
+# Warstwy kontekstowe na mapie. Dzialki pokazujemy tylko te, ktore przecinaja
+# korytarz — czyli dokladnie te, ktore raport liczy jako zajete; dzialki, ktorej
+# na mapie nie ma, droga nie tyka. Reszta to warstwy pogladowe, przycinane do
+# PROMIEN_KONTEKSTU, zeby nie ciagnac na strone calego wojewodztwa.
+PROMIEN_KONTEKSTU = 500
+KONTEKST = {
+    "osuwiska": "osuwiska",
+    "ruchy_masowe": "ruchy masowe",
+    "powodz": "tereny zalewowe",
+    "chronione": "obszary chronione",
+}
+
+
+def warstwy_kontekstowe(korytarz, postep=print):
+  """Warstwy terenowe przyciete do otoczenia korytarza."""
+  import geopandas as gpd
+  obszar = shapely.buffer(korytarz, PROMIEN_KONTEKSTU)
+  obiekty = []
+  for warstwa, opis in KONTEKST.items():
+    try:
+      gdf = gpd.read_file("warianty/kontekst.gpkg", layer=warstwa)
+    except Exception:
+      continue
+    gdf = gdf.to_crs(consts.CRS_METRYCZNY)
+    gdf["geometry"] = shapely.make_valid(gdf.geometry.values)
+    trafione = gdf.iloc[sorted(set(gdf.sindex.query(obszar, predicate="intersects")))]
+    if trafione.empty:
+      continue
+    # Przycinamy geometrie, a nie tylko filtrujemy — inaczej pojedynczy wielki
+    # obszar chroniony przyciagnalby na strone pol wojewodztwa.
+    przyciete = trafione.copy()
+    przyciete["geometry"] = shapely.intersection(trafione.geometry.values, obszar)
+    przyciete = przyciete[~przyciete.geometry.is_empty]
+    if przyciete.empty:
+      continue
+    dane = json.loads(przyciete.to_crs(4326).to_json(drop_id=True))
+    for obiekt in dane["features"]:
+      obiekt["geometry"]["coordinates"] = zaokraglij(obiekt["geometry"]["coordinates"])
+      obiekt["properties"] = {"warstwa": warstwa, "opis": opis}
+    obiekty.extend(dane["features"])
+    postep("    {:<18} {:>5} obiektow".format(warstwa, len(dane["features"])))
+  return obiekty
+
+
+def warstwa_dzialek(wariant, korytarz, postep=print):
+  """Dzialki ewidencyjne przecinajace korytarz."""
+  import geopandas as gpd
+  try:
+    gdf = gpd.read_file("warianty/wariant-{}.gpkg".format(wariant), layer="dzialki")
+  except Exception:
+    return []
+  gdf = gdf.to_crs(consts.CRS_METRYCZNY)
+  gdf["geometry"] = shapely.make_valid(gdf.geometry.values)
+  trafione = gdf.iloc[sorted(set(gdf.sindex.query(korytarz, predicate="intersects")))]
+  if trafione.empty:
+    return []
+  dane = json.loads(trafione.to_crs(4326).to_json(drop_id=True))
+  for obiekt in dane["features"]:
+    obiekt["geometry"]["coordinates"] = zaokraglij(obiekt["geometry"]["coordinates"])
+    obiekt["properties"] = {"warstwa": "dzialki"}
+  postep("    {:<18} {:>5} obiektow".format("dzialki", len(dane["features"])))
+  return dane["features"]
+
+
 def warstwy_wariantu(wariant):
   """Trzy warstwy jednego wariantu w jednym GeoJSON-ie, z polem 'warstwa'."""
   sciezka = "raporty/wariant-{}-slad.gpkg".format(wariant)
@@ -159,8 +223,19 @@ if __name__ == "__main__":
     powierzchnie[wariant] = (shapely.union_all(powierzchnia.geometry.values)
                              if not powierzchnia.empty else None)
 
-    rozmiar = zapisz_json("{}/wariant-{}.geojson".format(KATALOG, wariant),
-                          warstwy_wariantu(wariant))
+    zbior = warstwy_wariantu(wariant)
+    korytarz = shapely.union_all(warstwy.geometry.values)
+    zbior["features"].extend(warstwy_kontekstowe(korytarz))
+    rozmiar = zapisz_json("{}/wariant-{}.geojson".format(KATALOG, wariant), zbior)
+
+    # Dzialki osobno i wczytywane leniwie: sa najwieksza warstwa, a do pytania
+    # "czy moj dom jest zajety" niepotrzebne. Trzymanie ich w glownym pliku
+    # podnosilo wejscie na strone z ~200 kB do ~460 kB.
+    dzialki = warstwa_dzialek(wariant, korytarz)
+    if dzialki:
+      rozmiar += zapisz_json(
+          "{}/wariant-{}-dzialki.geojson".format(KATALOG, wariant),
+          {"type": "FeatureCollection", "features": dzialki})
     razem += rozmiar
     print("  wariant {}: {:.0f} kB".format(wariant, rozmiar / 1024))
 
