@@ -91,6 +91,48 @@ KONTEKST = {
 # obiektu w DXF-ie, a "Text" to nazwa wzoru kreskowania ("SOLID").
 # Rozroznienie ma znaczenie merytoryczne: osuwisko czynne pod planowana droga
 # to co innego niz nieczynne.
+# Miary terenowe do panelu. Czytamy je wprost z podsumowanie.csv, zeby mapa
+# nie mogla pokazac czegos innego niz raport — to ten sam wynik, nie drugie
+# liczenie.
+MIARY_DO_PANELU = [
+    ("działki", "działki", None),
+    ("zajęte [ha]", "zajęta powierzchnia", "ha"),
+    ("osuwiska [ha]", "osuwiska", "ha"),
+    ("osuwisko aktywne ciągle [ha]", "— aktywne ciągle", "ha"),
+    ("osuwisko aktywne okresowo [ha]", "— aktywne okresowo", "ha"),
+    ("osuwisko nieaktywne [ha]", "— nieaktywne", "ha"),
+    ("ruchy masowe [ha]", "obszary zagrożone ruchami mas", "ha"),
+    ("tereny zalewowe [ha]", "tereny zalewowe", "ha"),
+    ("obszary chronione [ha]", "obszary chronione", "ha"),
+]
+# Warstwa na mapie -> kolumna, ktora pokazujemy przy jej przelaczniku.
+MIARA_WARSTWY = {
+    "osuwiska": "osuwiska [ha]",
+    "ruchy_masowe": "ruchy masowe [ha]",
+    "powodz": "tereny zalewowe [ha]",
+    "chronione": "obszary chronione [ha]",
+    "dzialki": "działki",
+}
+
+
+def zapisz_miary():
+  """Miary terenowe wszystkich wariantow w jednym malym pliku."""
+  import pandas as pd
+  sciezka = "{}/podsumowanie.csv".format(functions.KATALOG_WYNIKOW)
+  if not os.path.exists(sciezka):
+    return 0
+  tabela = pd.read_csv(sciezka)
+  wynik = {"kolejnosc": [[k, o, j] for k, o, j in MIARY_DO_PANELU],
+           "przy_warstwie": MIARA_WARSTWY, "warianty": {}}
+  for _, wiersz in tabela.iterrows():
+    dane = {}
+    for kolumna, _opis, _jedn in MIARY_DO_PANELU:
+      if kolumna in wiersz and pd.notna(wiersz[kolumna]):
+        dane[kolumna] = float(wiersz[kolumna])
+    wynik["warianty"][wiersz["wariant"]] = dane
+  return zapisz_json("{}/miary.json".format(KATALOG), wynik)
+
+
 def warstwy_kontekstowe(korytarz, postep=print):
   """Warstwy terenowe przyciete do otoczenia korytarza."""
   import geopandas as gpd
@@ -257,6 +299,11 @@ if __name__ == "__main__":
           {"type": "FeatureCollection", "features": dzialki})
     razem += rozmiar
     print("  wariant {}: {:.0f} kB".format(wariant, rozmiar / 1024))
+
+  rozmiar = zapisz_miary()
+  if rozmiar:
+    razem += rozmiar
+    print("\nMiary terenowe do panelu: {:.0f} kB".format(rozmiar / 1024))
 
   print("\nIndeks wyszukiwarki (promien {} m):".format(PROMIEN_INDEKSU))
   wiersze = indeks_adresow(korytarze, powierzchnie)

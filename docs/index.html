@@ -73,6 +73,15 @@
   table.strefy-tab tr.wylaczona td.liczba,
   table.strefy-tab tr.wylaczona td label { opacity: .4; }
   table.strefy-tab label { display: flex; align-items: center; gap: 7px; cursor: pointer; }
+  table.miary { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.miary td { padding: 3px 0; }
+  table.miary td.l { text-align: right; font-variant-numeric: tabular-nums;
+                     white-space: nowrap; padding-left: 10px; }
+  table.miary tr.wciecie td:first-child { padding-left: 12px; color: var(--przygasly);
+                                          font-size: 13px; }
+  table.miary tr.zero td { color: var(--przygasly); opacity: .55; }
+  .miara-przy { color: var(--przygasly); font-size: 12px; margin-left: 4px;
+                font-variant-numeric: tabular-nums; }
   .podpis-terenu { background: rgba(255,255,255,.82); border: none; box-shadow: none;
                    font-size: 11px; font-weight: 600; padding: 1px 5px;
                    border-radius: 3px; white-space: nowrap; }
@@ -137,6 +146,13 @@
       <label class="przelacznik"><input type="checkbox" data-warstwa="ruchy_masowe"> obszary zagrożone ruchami mas</label>
       <label class="przelacznik"><input type="checkbox" data-warstwa="powodz"> tereny zalewowe</label>
       <label class="przelacznik"><input type="checkbox" data-warstwa="chronione"> obszary chronione</label>
+    </div>
+
+    <div class="sekcja">
+      <h2>Korytarz przechodzi przez</h2>
+      <table class="miary"><tbody id="miary-terenu"></tbody></table>
+      <p class="uwaga">Miary dotyczą całego korytarza — śladu drogi razem
+      z pasem nad tunelem. W hektarach, poza liczbą działek.</p>
     </div>
 
     <div class="sekcja">
@@ -476,6 +492,59 @@ function ustawWybor(ktory, wszystkie) {
   zdarzenieZbiorcze("filtr-" + ktory, "Zawężenie budynków");
 }
 
+let miary = null;
+
+async function wczytajMiary() {
+  if (miary) return miary;
+  try {
+    const odpowiedz = await fetch("dane/miary.json");
+    miary = await odpowiedz.json();
+  } catch (blad) {
+    miary = { kolejnosc: [], przy_warstwie: {}, warianty: {} };
+  }
+  return miary;
+}
+
+function liczbaMiary(wartosc, jednostka) {
+  const tekst = wartosc.toLocaleString("pl-PL",
+    { minimumFractionDigits: jednostka ? 1 : 0, maximumFractionDigits: 1 });
+  return jednostka ? tekst + " " + jednostka : tekst;
+}
+
+function odswiezMiary() {
+  if (!miary) return;
+  const dane = miary.warianty[wariantAktywny] || {};
+  const cialo = document.getElementById("miary-terenu");
+  cialo.innerHTML = "";
+  for (const [kolumna, opis, jednostka] of miary.kolejnosc) {
+    if (!(kolumna in dane)) continue;
+    const wartosc = dane[kolumna];
+    const wiersz = document.createElement("tr");
+    // Rozbicie osuwisk wciete pod pozycja nadrzedna; zera przygaszone, ale
+    // pokazane — to, ze wariant nie tyka obszaru chronionego, tez jest wynikiem.
+    if (opis.startsWith("—")) wiersz.classList.add("wciecie");
+    if (wartosc === 0) wiersz.classList.add("zero");
+    wiersz.innerHTML = "<td>" + opis + '</td><td class="l">' +
+      liczbaMiary(wartosc, jednostka) + "</td>";
+    cialo.appendChild(wiersz);
+  }
+
+  // Liczba przy przelaczniku warstwy.
+  for (const [warstwa, kolumna] of Object.entries(miary.przy_warstwie)) {
+    const pole = document.querySelector('[data-warstwa="' + warstwa + '"]');
+    if (!pole) continue;
+    let znacznik = pole.parentElement.querySelector(".miara-przy");
+    if (!znacznik) {
+      znacznik = document.createElement("span");
+      znacznik.className = "miara-przy";
+      pole.parentElement.appendChild(znacznik);
+    }
+    znacznik.textContent = kolumna in dane
+      ? "· " + liczbaMiary(dane[kolumna], kolumna.includes("[ha]") ? "ha" : "")
+      : "";
+  }
+}
+
 // Liczby przy przelacznikach: ile obiektow jest w kazdej strefie i ile widac
 // lacznie. Bez tego trzeba je zgadywac z mapy.
 function odswiezLiczby() {
@@ -687,6 +756,7 @@ async function pokazWariant(wariant) {
     mapa.__dopasowano = true;
   }
   odswiezOpis();
+  wczytajMiary().then(odswiezMiary);
   zbudujWyborBudynkow();
   odswiezWidocznoscBudynkow();
   odswiezLiczby();

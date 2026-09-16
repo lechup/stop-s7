@@ -327,6 +327,16 @@ jednocześnie na mapę i na statystyki: można obejrzeć same domy mieszkalne,
 albo mieszkalne razem z oświatą i opieką zdrowotną. Wybór przeżywa zmianę
 wariantu.
 
+Sekcja **„Korytarz przechodzi przez"** podaje miary terenowe dla całego
+korytarza: liczbę działek, zajętą powierzchnię, osuwiska w rozbiciu na stopnie
+aktywności, tereny zalewowe i obszary chronione. Te same liczby stoją przy
+przełącznikach odpowiednich warstw. Pochodzą **wprost z `podsumowanie.csv`**,
+więc mapa nie może pokazać czegoś innego niż raport — to ten sam wynik, a nie
+drugie liczenie.
+
+Miary terenowe są osobno od tabelki stref, bo mierzą co innego: strefy liczą
+obiekty w sztukach i dotyczą otoczenia drogi, a te — hektary samego korytarza.
+
 Przy każdej strefie stoi liczba adresów i budynków, a pod spodem suma tego, co
 aktualnie widać na mapie — reagująca na odklikanie strefy, wybór rodzaju
 budynku i wyłączenie całej warstwy. Liczby zgadzają się z `podsumowanie.csv`, więc tabelka w panelu jest
