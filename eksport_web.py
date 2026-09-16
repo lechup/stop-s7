@@ -212,6 +212,44 @@ def warstwa_dzialek(wariant, korytarz, postep=print):
   return dane["features"]
 
 
+# Kilometraz podajemy tylko dla wariantow, ktore obiekt faktycznie dotycza —
+# dalej jest bez znaczenia, a indeks by spuchl.
+PROMIEN_KILOMETRAZU = 200
+
+_kilometraz = {}
+
+
+def punkty_kilometrazu(wariant):
+  """Punkty kilometrazu co 100 m wraz z etykieta (np. '7+300')."""
+  import geopandas as gpd
+  if wariant not in _kilometraz:
+    try:
+      gdf = gpd.read_file("warianty/wariant-{}.gpkg".format(wariant),
+                          layer="kilometraz_100m").to_crs(consts.CRS_METRYCZNY)
+      gdf = gdf[gdf["Text"].notna()]
+      _kilometraz[wariant] = gdf.reset_index(drop=True)
+    except Exception:
+      _kilometraz[wariant] = None
+  return _kilometraz[wariant]
+
+
+def dopisz_kilometraz(geometrie, wariant, wartosci, w_zasiegu):
+  """Dla obiektow w zasiegu dopisuje etykiete najblizszego slupka kilometrazu."""
+  import geopandas as gpd
+  slupki = punkty_kilometrazu(wariant)
+  if slupki is None or slupki.empty:
+    return
+  indeksy = [i for i, blisko in enumerate(w_zasiegu) if blisko]
+  if not indeksy:
+    return
+  wybrane = gpd.GeoDataFrame(geometry=[geometrie[i] for i in indeksy],
+                             crs=consts.CRS_METRYCZNY)
+  pary = gpd.sjoin_nearest(wybrane, slupki[["Text", "geometry"]], how="inner")
+  pary = pary[~pary.index.duplicated()]
+  for pozycja, etykieta in zip(pary.index, pary["Text"]):
+    wartosci[indeksy[pozycja]] = str(etykieta)
+
+
 def indeks_dzialek(korytarze, postep=print):
   """Dzialki w promieniu PROMIEN_INDEKSU od ktoregokolwiek korytarza.
 
@@ -245,9 +283,13 @@ def indeks_dzialek(korytarze, postep=print):
     pary = pary.sort_values("_odl").groupby(level=0).first()
     bliskie["_odl"] = pary["_odl"].reindex(bliskie.index)
 
+    kilometraze = [None] * len(bliskie)
+    dopisz_kilometraz(list(bliskie.geometry.values), wariant, kilometraze,
+                      [o <= PROMIEN_KILOMETRAZU for o in bliskie["_odl"]])
+
     srodki = gpd.GeoSeries(bliskie.geometry.representative_point(),
                            crs=consts.CRS_METRYCZNY).to_crs(4326)
-    for (_, rekord), punkt in zip(bliskie.iterrows(), srodki):
+    for pozycja, ((_, rekord), punkt) in enumerate(zip(bliskie.iterrows(), srodki)):
       pole = float(rekord.get("pow_m2") or 0)
       odleglosc = float(rekord["_odl"] or 0)
       if odleglosc > 0:
@@ -261,9 +303,11 @@ def indeks_dzialek(korytarze, postep=print):
           tekst(rekord.get("gmina")),
           round(pole),
           round(punkt.x, MIEJSC), round(punkt.y, MIEJSC),
-          {},
+          {}, {},
       ])
       wpis[6][wariant] = wartosc
+      if kilometraze[pozycja]:
+        wpis[7][wariant] = kilometraze[pozycja]
     postep("    {}: {} działek".format(wariant, len(bliskie)))
   return zebrane
 
@@ -315,8 +359,10 @@ def indeks_adresow(korytarze, powierzchnie):
   wgs = adresy.to_crs(4326)
 
   wiersze = []
+  punkty = []
   for (_, rekord), punkt_wgs in zip(adresy.iterrows(), wgs.geometry):
     punkt = rekord.geometry
+    punkty.append(punkt)
     pomiary = []
     for wariant in consts.VARIANTS:
       od_korytarza = shapely.distance(punkt, korytarze[wariant])
@@ -333,7 +379,19 @@ def indeks_adresow(korytarze, powierzchnie):
         round(punkt_wgs.x, MIEJSC),
         round(punkt_wgs.y, MIEJSC),
         pomiary,
+        {},
     ])
+
+  # Kilometraz liczymy hurtem na wariant: 14 tys. adresow razy szesc wariantow
+  # to za duzo, zeby pytac o kazdy obiekt osobno.
+  for numer, wariant in enumerate(consts.VARIANTS):
+    w_zasiegu = [wiersz[6][numer][0] <= PROMIEN_KILOMETRAZU
+                 for wiersz in wiersze]
+    etykiety = [None] * len(wiersze)
+    dopisz_kilometraz(punkty, wariant, etykiety, w_zasiegu)
+    for wiersz, etykieta in zip(wiersze, etykiety):
+      if etykieta:
+        wiersz[7][wariant] = etykieta
   return wiersze
 
 

@@ -384,24 +384,57 @@ def wczytaj_kontekst(warstwa):
   return _kontekst[warstwa]
 
 
+# Progi dotkliwosci zajecia dzialki [%]. Dzialka tracaca 3% to co innego niz
+# tracaca 80% — ta druga przestaje sie nadawac do czegokolwiek, a w samej
+# liczbie dzialek obie wazyly tyle samo.
+PROGI_ZAJECIA = [50, 90]
+
+
+def zajete_dzialki(wariant, korytarz):
+  """Dzialki przeciete przez korytarz, z udzialem zajecia i informacja o zabudowie.
+
+  Zwraca GeoDataFrame z kolumnami udzial_proc i zabudowana."""
+  try:
+    dzialki = gpd.read_file(geometria.sciezka(wariant), layer="dzialki")
+  except Exception:
+    return None
+  dzialki = dzialki.to_crs(consts.CRS_METRYCZNY)
+  dzialki["geometry"] = shapely.make_valid(dzialki.geometry.values)
+  trafione = dzialki.iloc[sorted(set(
+      dzialki.sindex.query(korytarz, predicate="intersects")))].copy()
+  if trafione.empty:
+    return trafione
+
+  pola = trafione["pow_m2"].astype(float)
+  zajete = shapely.area(shapely.intersection(trafione.geometry.values, korytarz))
+  trafione["zajete_m2"] = zajete
+  trafione["udzial_proc"] = [
+      round(100 * z / p, 1) if p else 0.0 for z, p in zip(zajete, pola)]
+
+  budynki = wczytaj_budynki()
+  zabudowane = set()
+  if budynki is not None and len(budynki):
+    pary = budynki.sindex.query(trafione.geometry.values, predicate="intersects")
+    zabudowane = set(pary[0].tolist())
+  trafione["zabudowana"] = [i in zabudowane for i in range(len(trafione))]
+  return trafione
+
+
 def miary_terenu(wariant, korytarz):
   """Ile korytarza przypada na dzialki ewidencyjne i tereny wrazliwe.
 
   Dzialki sa wlasne dla wariantu (przyciete do jego obszaru), reszta wspolna."""
   wynik = {}
 
-  try:
-    dzialki = gpd.read_file(geometria.sciezka(wariant), layer="dzialki")
-    dzialki = dzialki.to_crs(consts.CRS_METRYCZNY)
-    dzialki["geometry"] = shapely.make_valid(dzialki.geometry.values)
-    trafione = dzialki.iloc[sorted(set(
-        dzialki.sindex.query(korytarz, predicate="intersects")))]
-    zajete = shapely.area(shapely.intersection(
-        shapely.union_all(trafione.geometry.values), korytarz)) if len(trafione) else 0
+  trafione = zajete_dzialki(wariant, korytarz)
+  if trafione is not None and len(trafione):
     wynik["działki"] = len(trafione)
-    wynik["zajęte [ha]"] = round(zajete / 10000, 1)
-  except Exception:
-    pass
+    wynik["zajęte [ha]"] = round(trafione["zajete_m2"].sum() / 10000, 1)
+    wynik["działki zabudowane"] = int(trafione["zabudowana"].sum())
+    wynik["działki niezabudowane"] = int((~trafione["zabudowana"]).sum())
+    for prog in PROGI_ZAJECIA:
+      wynik["działki zajęte >{}%".format(prog)] = int(
+          (trafione["udzial_proc"] > prog).sum())
 
   for warstwa, kolumna in WARSTWY_TERENU.items():
     obszar = wczytaj_kontekst(warstwa)
@@ -531,6 +564,67 @@ def zapisz_liste_rozbiorek():
     f.write("\n".join(L) + "\n")
 
 
+def zapisz_liste_dzialek():
+  """Lista dzialek do zajecia, pogrupowana po obrebach.
+
+  Wlasciciel gruntu bez zabudowy nie pojawia sie ani w rozbiorka.md, ani w zadnej
+  statystyce budynkow czy adresow — a jego dzialka bywa zajeta tak samo. To
+  jedyny dokument, w ktorym moze sie odnalezc."""
+  L = ["# Działki do zajęcia pod planowaną drogę S7", ""]
+  L.append("> **To wyliczenie, nie oficjalna lista wywłaszczeń.** Zestawienie powstało")
+  L.append("> z materiałów konsultacji społecznych przez rekonstrukcję śladu drogi —")
+  L.append("> obrys zajęcia terenu nie został opublikowany. To nie jest decyzja")
+  L.append("> administracyjna ani zapowiedź wywłaszczenia konkretnej działki.")
+  L.append(">")
+  L.append("> Udział zajęcia liczony jest z powierzchni ewidencyjnej działki. Granice")
+  L.append("> działek pochodzą z materiałów STEŚ, a nie wprost z ewidencji, więc przy")
+  L.append("> małych udziałach różnica rzędu ułamka procenta jest w granicach błędu.")
+  L.append(">")
+  L.append("> Metoda i kontrole: README.md w repozytorium")
+  L.append("> <https://github.com/lechup/stop-s7>")
+  L.append("")
+
+  cokolwiek = False
+  for wariant in consts.VARIANTS:
+    plik = "{}/wariant-{}-dzialki.csv".format(KATALOG_WYNIKOW, wariant)
+    if not os.path.exists(plik):
+      continue
+    cokolwiek = True
+    dzialki = pd.read_csv(plik)
+    L.append("## Wariant {}".format(wariant))
+    L.append("")
+    if dzialki.empty:
+      L.append("_Brak działek._\n")
+      continue
+    powyzej = [int((dzialki["udzial_proc"] > prog).sum()) for prog in PROGI_ZAJECIA]
+    L.append("Razem: **{}** działek ({} zabudowanych). Zajętych w ponad {}%: {}, "
+             "w ponad {}%: {}.".format(
+                 len(dzialki), int(dzialki["zabudowana"].sum()),
+                 PROGI_ZAJECIA[0], powyzej[0], PROGI_ZAJECIA[1], powyzej[1]))
+    L.append("")
+    # Najdotkliwiej zajete na gorze — to one decyduja o losie wlasciciela.
+    for obreb, grupa in dzialki.groupby("obreb", sort=True, dropna=False):
+      grupa = grupa.sort_values("udzial_proc", ascending=False)
+      L.append("### {} ({})".format(_tekst(obreb), len(grupa)))
+      L.append("")
+      L.append("| nr działki | zajęte | powierzchnia | zabudowa | identyfikator |")
+      L.append("|---|---|---|---|---|")
+      for _, r in grupa.iterrows():
+        udzial = r["udzial_proc"]
+        L.append("| {} | {} | {} m² | {} | `{}` |".format(
+            _tekst(r.get("nr_dzialki")),
+            "<1%" if udzial < 1 else "{:.0f}%".format(udzial),
+            "{:,.0f}".format(float(r.get("pow_m2") or 0)).replace(",", " "),
+            "tak" if r.get("zabudowana") else "—",
+            _tekst(r.get("teryt"))))
+      L.append("")
+
+  if not cokolwiek:
+    return
+  with open("{}/dzialki.md".format(KATALOG_WYNIKOW), "w") as f:
+    f.write("\n".join(L) + "\n")
+
+
 def generate(warianty=None, zapisz_slad=True, postep=print):
   warianty = warianty or consts.VARIANTS
   os.makedirs(KATALOG_WYNIKOW, exist_ok=True)
@@ -554,6 +648,11 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
         ["NAZWA_MSC", "NAZWA_ULC", "_klucz"], na_position="first").drop(
         columns="_klucz")
     rozbiorka.drop(columns="geometry").to_csv(podstawa + "-rozbiorka.csv", index=False)
+
+    zajete = zajete_dzialki(wariant, warstwy["korytarz"])
+    if zajete is not None and len(zajete):
+      zajete.drop(columns="geometry").to_csv(
+          podstawa + "-dzialki.csv", index=False)
 
     if zapisz_slad:
       rodzaje, geom = [], []
@@ -609,11 +708,12 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
   # Int64 (z wielka litera) dopuszcza braki, wiec wariant policzony bez
   # budynkow zostaje pusty zamiast zamieniac cala kolumne na 225.0.
   for kolumna in tabela.columns:
-    if kolumna.startswith(BUDYNKI) or kolumna == "działki":
+    if (kolumna.startswith(BUDYNKI) or kolumna.startswith("działki")):
       tabela[kolumna] = tabela[kolumna].astype("Int64")
   tabela = tabela.sort_values("wariant").reset_index(drop=True)
   tabela.to_csv(sciezka, index=False)
   zapisz_liste_rozbiorek()
+  zapisz_liste_dzialek()
   # Pelna tabela ma ponad 50 kolumn — w terminalu pokazujemy przekroj,
   # komplet i tak idzie do podsumowanie.csv.
   skrot = ["wariant", W_SLADZIE, NAD_TUNELEM, DO_ROZBIORKI,
@@ -621,8 +721,8 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
            BUDYNKI_OSWIATA, BUDYNKI_ZDROWIE, "działki", "zajęte [ha]"]
   skrot = [k for k in skrot if k in tabela.columns]
   postep("\n" + tabela[skrot].to_string(index=False))
-  postep("\nZapisano {}/podsumowanie.csv i {}/rozbiorka.md".format(
-      KATALOG_WYNIKOW, KATALOG_WYNIKOW))
+  postep("\nZapisano {0}/podsumowanie.csv, {0}/rozbiorka.md i {0}/dzialki.md"
+         .format(KATALOG_WYNIKOW))
   return tabela
 
 

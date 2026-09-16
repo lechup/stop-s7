@@ -71,8 +71,10 @@ W katalogu `raporty/`:
 |---|---|
 | `podsumowanie.csv` | wiersz na wariant: strefy, budynki, działki i tereny wrażliwe |
 | `rozbiorka.md` | listy adresów do rozbiórki, pogrupowane po miejscowościach |
+| `dzialki.md` | działki przecinane przez korytarz z udziałem zajęcia, pogrupowane po obrębach |
 | `wariant-X-rozbiorka.csv` | te same adresy w formie tabelarycznej |
 | `wariant-X-adresy.csv` | wszystkie adresy do 200 m: odległość i strefa |
+| `wariant-X-dzialki.csv` | działki przecinane przez korytarz: TERYT, udział zajęcia, zabudowa |
 | `wariant-X-slad.gpkg` | do QGIS: warstwy `korytarz`, `budynki` i `adresy` |
 
 ### Adresy a budynki — dwie różne miary
@@ -210,6 +212,10 @@ nad tunelem:
 |---|---|
 | `działki` | ile działek ewidencyjnych przecina korytarz |
 | `zajęte [ha]` | powierzchnia tych działek przypadająca na korytarz |
+| `działki zabudowane` | z tego takie, na których stoi budynek z EGiB |
+| `działki niezabudowane` | pozostałe — pola, łąki, nieużytki |
+| `działki zajęte >50%` | działki, z których korytarz zabiera ponad połowę |
+| `działki zajęte >90%` | działki zajęte niemal w całości |
 | `osuwiska [ha]` | ile korytarza przechodzi przez obszary osuwiskowe |
 | `osuwisko aktywne ciągle [ha]` | z tego osuwiska czynne bez przerwy |
 | `osuwisko aktywne okresowo [ha]` | czynne okresowo |
@@ -225,6 +231,13 @@ problem inżynieryjny niż ustabilizowane. Obszary chronione rozbite są na
 dziesięć kategorii ochrony. Zera też zapisujemy: informacja, że **żaden wariant
 nie tyka parku narodowego, rezerwatu ani obszaru Natura 2000**, jest sama
 w sobie wynikiem i lepiej, żeby wynikała z tabeli niż z niczyjego zapewnienia.
+
+Sama liczba działek nie mówi jednak, jak dotkliwe jest zajęcie, więc podajemy
+też **udział zajęcia**: działki tracące ponad 50% i ponad 90% powierzchni.
+Skraj działki to co innego niż działka zabrana w całości, a między nimi leży
+przypadek najbardziej kłopotliwy dla właściciela: resztówka, czyli kawałek zbyt
+mały albo źle ukształtowany, żeby dało się go dalej używać. Pełną listę działek
+z procentem zajęcia i identyfikatorem TERYT zapisujemy w `raporty/dzialki.md`.
 
 Liczba działek jest istotna niezależnie od zabudowy: wywłaszczenie części
 działki dotyka właściciela także wtedy, gdy nie stoi na niej dom. Osuwiska
@@ -339,6 +352,13 @@ samym numerze. Wynik pokazuje dla **każdego** wariantu albo procent zajęcia
 działki, albo odległość od korytarza — a gdy działka leży dalej niż promień
 indeksu, mówi to wprost.
 
+Obie wyszukiwarki podają obok wyniku **kilometraż** — pikietaż z materiałów
+STEŚ (warstwa `kilometraz_100m`), czyli tę samą liczbę, którą posługują się
+projektanci. Dzięki temu adres albo działkę da się od razu powiązać z opisem
+w dokumentacji i z konkretnym odcinkiem na przekrojach. Podajemy go tylko dla
+wariantów przechodzących bliżej niż 200 m, bo dalej przestaje cokolwiek
+znaczyć.
+
 To odpowiedź na inne pytanie niż wyszukiwarka adresów: wywłaszczenie części
 działki dotyka właściciela także wtedy, gdy nic na niej nie stoi. Indeks obejmuje **31 565 działek** w promieniu 500 m od któregokolwiek
 wariantu — tak samo jak indeks adresów. Zasięg szerszy niż samo przecięcie jest
@@ -398,16 +418,17 @@ Dane generuje [eksport_web.py](eksport_web.py):
 
 | plik | zawartość | po gzipie |
 |---|---|---|
-| `docs/dane/wariant-X.geojson` | korytarz, budynki i adresy jednego wariantu | 40–58 kB |
-| `docs/dane/wariant-X-dzialki.geojson` | działki przecinające korytarz, wczytywane leniwie | 200–260 kB |
-| `docs/dane/dzialki-index.json` | 31 565 działek: procent zajęcia albo odległość | 583 kB |
+| `docs/dane/wariant-X.geojson` | korytarz, budynki, adresy i warstwy terenowe jednego wariantu | 194–299 kB |
+| `docs/dane/wariant-X-dzialki.geojson` | działki przecinające korytarz, wczytywane leniwie | 137–262 kB |
+| `docs/dane/dzialki-index.json` | 31 565 działek: procent zajęcia albo odległość, z kilometrażem | 645 kB |
 | `docs/dane/miary.json` | miary terenowe do panelu, czytane z `podsumowanie.csv` | 2 kB |
-| `docs/dane/adresy-index.json` | 13 924 adresy z odległością do każdego wariantu | 362 kB |
+| `docs/dane/adresy-index.json` | 13 924 adresy z odległością do każdego wariantu, z kilometrażem | 395 kB |
 
-Całość waży 662 kB po kompresji, więc nie ma po co sięgać po kafelki wektorowe —
-przeglądarka bierze zwykły GeoJSON, a Pages sam serwuje gzip. Indeks wyszukiwarki
-wczytywany jest dopiero przy pierwszym wpisaniu adresu, żeby wejście na stronę
-kosztowało ~60 kB.
+Całość waży 3,6 MB po kompresji, ale nikt nie pobiera całości: przeglądarka
+bierze jeden wariant naraz, a działki i indeksy wyszukiwarek dopiero wtedy, gdy
+ktoś ich użyje. Wejście na stronę kosztuje więc jeden plik wariantu, około
+220 kB. Przy takich rozmiarach nie ma po co sięgać po kafelki wektorowe —
+wystarczy zwykły GeoJSON, a Pages sam serwuje gzip.
 
 Indeks obejmuje adresy do **500 m** od któregokolwiek wariantu, czyli dalej niż
 raportowe 200 m — ktoś mieszkający tuż za granicą strefy dostaje konkretną liczbę
@@ -679,7 +700,7 @@ wszystko wziąć i przerobić — pod warunkiem, że ich wersja też będzie jaw
 | obrysy budynków | EGiB (GUGiK) | geometria z podstawowymi atrybutami bezpłatnie, do dowolnego wykorzystania |
 | warianty przebiegu | materiały konsultacji społecznych | — |
 
-Wyliczone raporty (`podsumowanie.csv`, `rozbiorka.md`) powstały z danych
+Wyliczone raporty (`podsumowanie.csv`, `rozbiorka.md`, `dzialki.md`) powstały z danych
 publicznych i można je cytować; przy powoływaniu się warto podać źródło
 i rocznik danych, bo PRG aktualizowany jest na bieżąco.
 

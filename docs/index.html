@@ -885,13 +885,19 @@ async function wczytajIndeks() {
 
 function tabelaDlaAdresu(wiersz) {
   const progi = indeks.progi;
-  let html = '<table class="strefy"><tr><th>wariant</th><th class="odl">odległość</th><th>strefa</th></tr>';
+  // Kilometraz pozwala odwolac sie do miejsca tak, jak robia to materialy
+  // konsultacyjne — przy pisaniu uwag ma to znaczenie proceduralne.
+  const km = wiersz[7] || {};
+  let html = '<table class="strefy"><tr><th>wariant</th><th class="odl">odległość</th>' +
+             "<th>strefa</th><th>km</th></tr>";
   wiersz[6].forEach((para, i) => {
     const [odleglosc, kod] = para;
-    html += "<tr><td>" + WARIANTY[i] +
+    const wariant = WARIANTY[i];
+    html += "<tr><td>" + wariant +
       '</td><td class="odl">' + odleglosc + " m</td><td>" +
       '<span class="znacznik" style="background:' + (BARWY_HEX[kod] || "#999") + '"></span>' +
-      etykietaStrefy(kod, progi) + "</td></tr>";
+      etykietaStrefy(kod, progi) + '</td><td class="uwaga">' +
+      (km[wariant] || "") + "</td></tr>";
   });
   return html + "</table>";
 }
@@ -945,12 +951,15 @@ function opisDzialki(wartosc) {
 
 function tabelaDlaDzialki(wiersz) {
   const udzialy = wiersz[7];
-  let html = '<table class="strefy"><tr><th>wariant</th><th class="odl">działka</th></tr>';
+  const km = wiersz[8] || {};
+  let html = '<table class="strefy"><tr><th>wariant</th><th class="odl">działka</th>' +
+             "<th>km</th></tr>";
   for (const wariant of indeksDzialek.warianty) {
     const { tekst, zajeta } = opisDzialki(udzialy[wariant]);
     html += "<tr><td>" + wariant + '</td><td class="odl">' +
       (zajeta ? "<strong>" + tekst + "</strong>"
-              : '<span class="uwaga">' + tekst + "</span>") + "</td></tr>";
+              : '<span class="uwaga">' + tekst + "</span>") +
+      '</td><td class="uwaga">' + (km[wariant] || "") + "</td></tr>";
   }
   return html + "</table>";
 }
