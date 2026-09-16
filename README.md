@@ -327,6 +327,12 @@ jednocześnie na mapę i na statystyki: można obejrzeć same domy mieszkalne,
 albo mieszkalne razem z oświatą i opieką zdrowotną. Wybór przeżywa zmianę
 wariantu.
 
+Strona ma motyw jasny i ciemny. Domyślnie idzie **za ustawieniem systemu**
+i reaguje na jego zmianę w locie; przycisk w nagłówku pozwala wybrać jawnie,
+a wybór zapamiętuje `localStorage`. Kafelki OpenStreetMap są jasne, więc
+w motywie ciemnym odwracamy je filtrem CSS — zamiast dokładać drugiego dostawcę
+kafelków i kolejną politykę użytkowania.
+
 Sekcja **„Korytarz przechodzi przez"** podaje miary terenowe dla całego
 korytarza: liczbę działek, zajętą powierzchnię, osuwiska w rozbiciu na stopnie
 aktywności, tereny zalewowe i obszary chronione. Te same liczby stoją przy

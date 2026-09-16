@@ -6,9 +6,41 @@
 <title>Metoda — S7, warianty a zabudowa</title>
 <meta name="description" content="Jak policzono, ile domów leży w śladzie planowanej S7 — i czego te liczby nie mówią.">
 <style>
+  /* Motyw jasny jest podstawa; ciemny nadpisuje tylko to, co musi.
+     Kolejnosc regul ma znaczenie: preferencja systemowa dziala, dopoki
+     uzytkownik nie wybierze czegos jawnie, a wtedy wygrywa data-motyw. */
   :root {
+    color-scheme: light;
     --tlo: #f7f7f5; --panel: #fff; --tekst: #1a1a1a; --przygasly: #5f6368;
-    --ramka: #d8d8d4; --akcent: #1a5fb4; --uwaga: #fdf3e3; --uwaga-ramka: #e8c48a;
+    --ramka: #d8d8d4; --akcent: #1a5fb4; --pole: #fff;
+    --uwaga: #fdf3e3; --uwaga-ramka: #e8c48a;
+    --podpis-tlo: rgba(255,255,255,.82);
+    --filtr-kafelkow: none;
+    --dzialki: #7a7a75; --osuwisko: #a51d2d; --powodz: #1c71d8; --chronione: #26a269;
+    --slad: #c01c28; --tunel: #e66100; --s20: #f5c211; --s30: #99c1f1;
+    --s50: #62a0ea; --s200: #b5cee4;
+  }
+
+  :root:not([data-motyw="jasny"]) { }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-motyw="jasny"]) {
+      color-scheme: dark;
+      --tlo: #16161a; --panel: #1d1d22; --tekst: #e7e7e4; --przygasly: #9a9aa3;
+      --ramka: #34343c; --akcent: #78aeea; --pole: #24242b;
+      --uwaga: #2e2617; --uwaga-ramka: #6b552c;
+      --podpis-tlo: rgba(24,24,28,.86);
+      /* Kafelki OSM sa jasne — odwracamy je filtrem zamiast dokladac drugiego
+         dostawcy kafelkow i kolejnej polityki uzytkowania. */
+      --filtr-kafelkow: invert(1) hue-rotate(180deg) brightness(.92) contrast(.92);
+    }
+  }
+  :root[data-motyw="ciemny"] {
+    color-scheme: dark;
+    --tlo: #16161a; --panel: #1d1d22; --tekst: #e7e7e4; --przygasly: #9a9aa3;
+    --ramka: #34343c; --akcent: #78aeea; --pole: #24242b;
+      --uwaga: #2e2617; --uwaga-ramka: #6b552c;
+    --podpis-tlo: rgba(24,24,28,.86);
+    --filtr-kafelkow: invert(1) hue-rotate(180deg) brightness(.92) contrast(.92);
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--tlo); color: var(--tekst);
@@ -36,7 +68,7 @@
           padding: 12px 16px; margin-bottom: 26px; font-size: 15px; }
   .spis ol { margin: 6px 0 0; padding-left: 20px; }
   .spis li { padding: 2px 0; }
-  code { background: #eeeeec; padding: 1px 5px; border-radius: 3px; font-size: 13px; }
+  code { background: var(--pole); padding: 1px 5px; border-radius: 3px; font-size: 13px; }
   .przypis { font-size: 13px; color: var(--przygasly); }
   footer { margin-top: 44px; padding-top: 16px; border-top: 1px solid var(--ramka);
            font-size: 14px; color: var(--przygasly); }
@@ -44,6 +76,14 @@
              margin-left: 6px; opacity: 0; }
   h2:hover .kotwica { opacity: 1; }
 </style>
+<script>
+  try {
+    var zapisany = localStorage.getItem("motyw");
+    if (zapisany === "jasny" || zapisany === "ciemny") {
+      document.documentElement.setAttribute("data-motyw", zapisany);
+    }
+  } catch (e) { /* prywatne okno — zostaje motyw systemowy */ }
+</script>
 </head>
 <body>
 <div class="strona">

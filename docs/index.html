@@ -7,13 +7,41 @@
 <meta name="description" content="Które domy leżą w śladzie planowanej S7 — mapa wariantów A–F i wyszukiwarka adresu.">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
+  /* Motyw jasny jest podstawa; ciemny nadpisuje tylko to, co musi.
+     Kolejnosc regul ma znaczenie: preferencja systemowa dziala, dopoki
+     uzytkownik nie wybierze czegos jawnie, a wtedy wygrywa data-motyw. */
   :root {
+    color-scheme: light;
     --tlo: #f7f7f5; --panel: #fff; --tekst: #1a1a1a; --przygasly: #5f6368;
-    --ramka: #d8d8d4; --akcent: #1a5fb4;
+    --ramka: #d8d8d4; --akcent: #1a5fb4; --pole: #fff; --na-akcencie: #fff;
+    --podpis-tlo: rgba(255,255,255,.82);
+    --filtr-kafelkow: none;
     --dzialki: #7a7a75; --osuwisko: #a51d2d; --powodz: #1c71d8; --chronione: #26a269;
     --slad: #c01c28; --tunel: #e66100; --s20: #f5c211; --s30: #99c1f1;
     --s50: #62a0ea; --s200: #b5cee4;
   }
+
+  :root:not([data-motyw="jasny"]) { }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-motyw="jasny"]) {
+      color-scheme: dark;
+      --tlo: #16161a; --panel: #1d1d22; --tekst: #e7e7e4; --przygasly: #9a9aa3;
+      --ramka: #34343c; --akcent: #78aeea; --pole: #24242b; --na-akcencie: #16161a;
+      --podpis-tlo: rgba(24,24,28,.86);
+      /* Kafelki OSM sa jasne — odwracamy je filtrem zamiast dokladac drugiego
+         dostawcy kafelkow i kolejnej polityki uzytkowania. */
+      --filtr-kafelkow: invert(1) hue-rotate(180deg) brightness(.92) contrast(.92);
+    }
+  }
+  :root[data-motyw="ciemny"] {
+    color-scheme: dark;
+    --tlo: #16161a; --panel: #1d1d22; --tekst: #e7e7e4; --przygasly: #9a9aa3;
+    --ramka: #34343c; --akcent: #78aeea; --pole: #24242b; --na-akcencie: #16161a;
+    --podpis-tlo: rgba(24,24,28,.86);
+    --filtr-kafelkow: invert(1) hue-rotate(180deg) brightness(.92) contrast(.92);
+  }
+
+  .leaflet-tile-pane { filter: var(--filtr-kafelkow); }
   * { box-sizing: border-box; }
   body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
          color: var(--tekst); background: var(--tlo); }
@@ -26,10 +54,17 @@
   h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em;
        color: var(--przygasly); margin: 0 0 8px; font-weight: 600; }
   p.info { margin: 0; font-size: 13px; color: var(--przygasly); }
+  #motyw { position: absolute; top: 12px; right: 14px; border: 1px solid var(--ramka);
+           background: var(--pole); color: var(--przygasly); border-radius: 6px;
+           width: 30px; height: 30px; cursor: pointer; font-size: 15px; line-height: 1;
+           padding: 0; }
+  #motyw:hover { color: var(--tekst); border-color: var(--akcent); }
+  .sekcja:first-child { position: relative; }
+  h1 { padding-right: 38px; }
   .warianty { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
   .warianty button { padding: 9px 0; font-size: 15px; font-weight: 600; cursor: pointer;
-                     border: 1px solid var(--ramka); background: #fff; border-radius: 6px; }
-  .warianty button[aria-pressed="true"] { background: var(--akcent); color: #fff;
+                     border: 1px solid var(--ramka); background: var(--pole); border-radius: 6px; }
+  .warianty button[aria-pressed="true"] { background: var(--akcent); color: var(--na-akcencie);
                                           border-color: var(--akcent); }
   label.przelacznik { display: flex; align-items: center; gap: 8px; padding: 3px 0;
                       font-size: 14px; cursor: pointer; }
@@ -52,7 +87,7 @@
   details.rodzaje .skroty { padding-top: 4px; }
   #wyniki { margin-top: 8px; }
   .trafienie { padding: 7px 8px; border: 1px solid var(--ramka); border-radius: 6px;
-               margin-bottom: 6px; cursor: pointer; background: #fff; font-size: 14px; }
+               margin-bottom: 6px; cursor: pointer; background: var(--pole); font-size: 14px; }
   .trafienie:hover { border-color: var(--akcent); }
   table.strefy { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
   table.strefy th, table.strefy td { padding: 4px 6px; text-align: left;
@@ -82,7 +117,7 @@
   table.miary tr.zero td { color: var(--przygasly); opacity: .55; }
   .miara-przy { color: var(--przygasly); font-size: 12px; margin-left: 4px;
                 font-variant-numeric: tabular-nums; }
-  .podpis-terenu { background: rgba(255,255,255,.82); border: none; box-shadow: none;
+  .podpis-terenu { background: var(--podpis-tlo); color: var(--tekst); border: none; box-shadow: none;
                    font-size: 11px; font-weight: 600; padding: 1px 5px;
                    border-radius: 3px; white-space: nowrap; }
   .podpis-terenu::before { display: none; }
@@ -96,11 +131,24 @@
     #mapa { min-height: 48vh; }
   }
 </style>
+<script>
+  // Ustawiamy motyw przed pierwszym renderem, inaczej strona mrugnelaby jasnym
+  // tlem, zanim skrypt na dole zdazy zadzialac. Brak zapisanego wyboru znaczy
+  // "id za systemem" — nie ustawiamy wtedy nic, bo robi to @media.
+  try {
+    var zapisany = localStorage.getItem("motyw");
+    if (zapisany === "jasny" || zapisany === "ciemny") {
+      document.documentElement.setAttribute("data-motyw", zapisany);
+    }
+  } catch (e) { /* prywatne okno albo zablokowane dane — zostaje systemowy */ }
+</script>
 </head>
 <body>
 <div id="uklad">
   <div id="panel">
     <div class="sekcja">
+      <button id="motyw" type="button" title="Przełącz motyw jasny/ciemny"
+              aria-label="Przełącz motyw jasny/ciemny"></button>
       <h1>S7 — warianty a zabudowa</h1>
       <p class="info">Który wariant przechodzi przez czyje domy. Dane: materiały
       konsultacji społecznych, punkty adresowe PRG i obrysy budynków EGiB.</p>
@@ -205,6 +253,44 @@ function zdarzenieZbiorcze(nazwa, opis, ms) {
   clearTimeout(_opoznione[nazwa]);
   _opoznione[nazwa] = setTimeout(() => zdarzenie(nazwa, opis), ms || 1200);
 }
+
+// Motyw: bez zapisanego wyboru idziemy za systemem (robi to @media w CSS),
+// a jawny wybor zapisujemy i wtedy wygrywa data-motyw.
+const przyciskMotywu = document.getElementById("motyw");
+
+function systemowyCiemny() {
+  return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function ciemnyTeraz() {
+  const jawny = document.documentElement.getAttribute("data-motyw");
+  if (jawny) return jawny === "ciemny";
+  return systemowyCiemny();
+}
+
+function odswiezPrzyciskMotywu() {
+  const ciemny = ciemnyTeraz();
+  przyciskMotywu.textContent = ciemny ? "☀" : "☾";
+  przyciskMotywu.title = ciemny ? "Przełącz na motyw jasny" : "Przełącz na motyw ciemny";
+  przyciskMotywu.setAttribute("aria-label", przyciskMotywu.title);
+}
+
+przyciskMotywu.addEventListener("click", () => {
+  const nowy = ciemnyTeraz() ? "jasny" : "ciemny";
+  document.documentElement.setAttribute("data-motyw", nowy);
+  try { localStorage.setItem("motyw", nowy); } catch (e) { /* bez zapisu */ }
+  odswiezPrzyciskMotywu();
+  zdarzenieZbiorcze("motyw-" + nowy, "Przełączenie motywu");
+});
+
+// Gdy uzytkownik nie wybral nic jawnie, reagujemy na zmiane ustawien systemu.
+if (window.matchMedia) {
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (!document.documentElement.getAttribute("data-motyw")) odswiezPrzyciskMotywu();
+  });
+}
+
+odswiezPrzyciskMotywu();
 
 const WARIANTY = ["A", "B", "C", "D", "E", "F"];
 
