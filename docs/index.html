@@ -73,6 +73,10 @@
   table.strefy-tab tr.wylaczona td.liczba,
   table.strefy-tab tr.wylaczona td label { opacity: .4; }
   table.strefy-tab label { display: flex; align-items: center; gap: 7px; cursor: pointer; }
+  .podpis-terenu { background: rgba(255,255,255,.82); border: none; box-shadow: none;
+                   font-size: 11px; font-weight: 600; padding: 1px 5px;
+                   border-radius: 3px; white-space: nowrap; }
+  .podpis-terenu::before { display: none; }
   .legenda div { font-size: 13px; padding: 2px 0; }
   .uwaga { font-size: 12px; color: var(--przygasly); }
   #przelacz-panel { display: none; }
@@ -129,7 +133,10 @@
       </details>
       <label class="przelacznik"><input type="checkbox" data-warstwa="adresy" checked> adresy (PRG)</label>
       <label class="przelacznik"><input type="checkbox" data-warstwa="dzialki"> działki zajęte<span id="licznik-dzialek" class="uwaga"></span></label>
-      <label class="przelacznik"><input type="checkbox" data-warstwa="teren"> osuwiska i tereny zalewowe</label>
+      <label class="przelacznik"><input type="checkbox" data-warstwa="osuwiska"> osuwiska</label>
+      <label class="przelacznik"><input type="checkbox" data-warstwa="ruchy_masowe"> obszary zagrożone ruchami mas</label>
+      <label class="przelacznik"><input type="checkbox" data-warstwa="powodz"> tereny zalewowe</label>
+      <label class="przelacznik"><input type="checkbox" data-warstwa="chronione"> obszary chronione</label>
     </div>
 
     <div class="sekcja">
@@ -292,13 +299,17 @@ function widocznyKlucz(klucz) {
 // przelaczanie stref zdejmuje i dodaje grupy z powrotem, co bez tego
 // wypychaloby wlasnie wlaczona warstwe na wierzch. Adresy musza byc nad
 // budynkami, inaczej klikniecie w punkt trafia w obrys pod nim.
-const KOLEJNOSC = { teren: 395, dzialki: 400, korytarz: 410, budynki: 450, adresy: 490 };
+const WARSTWY_TERENU = ["osuwiska", "ruchy_masowe", "powodz", "chronione"];
+const KOLEJNOSC = {
+  chronione: 391, powodz: 392, ruchy_masowe: 393, osuwiska: 394,
+  dzialki: 400, korytarz: 410, budynki: 450, adresy: 490,
+};
 for (const [nazwa, zindex] of Object.entries(KOLEJNOSC)) {
   mapa.createPane("pane-" + nazwa).style.zIndex = zindex;
 }
-const DOMYSLNIE_WYLACZONE = new Set(["dzialki", "teren"]);
+const DOMYSLNIE_WYLACZONE = new Set(["dzialki", ...WARSTWY_TERENU]);
 
-for (const nazwa of ["teren", "dzialki", "korytarz", "budynki", "adresy"]) {
+for (const nazwa of [...WARSTWY_TERENU, "dzialki", "korytarz", "budynki", "adresy"]) {
   warstwyMapy[nazwa] = L.layerGroup();
   if (!DOMYSLNIE_WYLACZONE.has(nazwa)) warstwyMapy[nazwa].addTo(mapa);
   podgrupy[nazwa] = {};
@@ -537,6 +548,11 @@ const BARWY_TERENU = {
   osuwiska: "#a51d2d", ruchy_masowe: "#c64600",
   powodz: "#1c71d8", chronione: "#26a269",
 };
+const PROG_PODPISU_HA = 5;
+const NAZWY_WARSTW_TERENU = {
+  osuwiska: "osuwiska", ruchy_masowe: "obszary zagrożone ruchami mas",
+  powodz: "tereny zalewowe", chronione: "obszary chronione",
+};
 
 function stylObiektu(obiekt) {
   const p = obiekt.properties;
@@ -545,7 +561,7 @@ function stylObiektu(obiekt) {
              fill: true, fillColor: "#7a7a75", fillOpacity: 0.06 };
   }
   if (BARWY_TERENU[p.warstwa]) {
-    return { pane: "pane-teren", color: BARWY_TERENU[p.warstwa], weight: 1,
+    return { pane: "pane-" + p.warstwa, color: BARWY_TERENU[p.warstwa], weight: 1,
              fillColor: BARWY_TERENU[p.warstwa], fillOpacity: 0.18 };
   }
   const pane = "pane-" + p.warstwa;
@@ -562,8 +578,12 @@ function stylObiektu(obiekt) {
       '<span class="uwaga">przecięta przez korytarz wariantu ' + wariantAktywny + "</span>";
   }
   if (BARWY_TERENU[p.warstwa]) {
-    return "<strong>" + (p.opis || p.warstwa) + "</strong><br>" +
-      '<span class="uwaga">materiały STEŚ</span>';
+    const grupa = NAZWY_WARSTW_TERENU[p.warstwa] || p.warstwa;
+    const rodzaj = p.opis || grupa;
+    return "<strong>" + rodzaj.charAt(0).toUpperCase() + rodzaj.slice(1) + "</strong>" +
+      (rodzaj === grupa ? "" : "<br>" + grupa) +
+      (p.ha ? "<br>" + p.ha + " ha (w promieniu 500 m od korytarza)" : "") +
+      '<br><span class="uwaga">materiały STEŚ</span>';
   }
   if (p.warstwa === "budynki") {
     const kod = kodStrefyZNazwy(p.strefa);
@@ -633,8 +653,19 @@ async function pokazWariant(wariant) {
     }),
     onEachFeature: (obiekt, warstwa) => {
       warstwa.bindPopup(opisObiektu(obiekt.properties));
-      let nazwaWarstwy = obiekt.properties.warstwa;
-      if (BARWY_TERENU[nazwaWarstwy]) nazwaWarstwy = "teren";
+      // Podpis rodzaju — osuwisko czynne to co innego niz nieczynne, a bez
+      // etykiety trzeba by klikac w kazdy obszar osobno.
+      if (BARWY_TERENU[obiekt.properties.warstwa] && obiekt.properties.opis) {
+        // Staly podpis tylko dla wiekszych obszarow — plam jest ponad tysiac,
+        // a podpisanie kazdej zamienialoby mape w platanine. Mniejsze pokazuja
+        // etykiete po najechaniu.
+        const duzy = (obiekt.properties.ha || 0) >= PROG_PODPISU_HA;
+        warstwa.bindTooltip(
+          obiekt.properties.opis +
+            (obiekt.properties.ha ? " (" + obiekt.properties.ha + " ha)" : ""),
+          { permanent: duzy, direction: "center", className: "podpis-terenu" });
+      }
+      const nazwaWarstwy = obiekt.properties.warstwa;
       const strefa = strefaObiektu(obiekt.properties);
       if (nazwaWarstwy === "budynki") {
         const klucz = kluczBudynku(obiekt.properties);

@@ -282,7 +282,18 @@ terenu.
 
 Poza korytarzem, budynkami i adresami mapa pokazuje dwie warstwy terenowe:
 **działki zajęte** (te przecinające korytarz, czyli dokładnie te, które raport
-liczy) oraz **osuwiska i tereny zalewowe**, przycięte do 500 m od korytarza.
+liczy) oraz cztery warstwy terenowe przycięte do 500 m od korytarza: **osuwiska**,
+**obszary zagrożone ruchami mas**, **tereny zalewowe** i **obszary chronione**,
+każda z osobnym przełącznikiem.
+
+Obszary są podpisane rodzajem, bo rozróżnienie ma znaczenie merytoryczne:
+osuwisko **aktywne ciągle** pod planowaną drogą to co innego niż nieaktywne,
+a obszary chronione dzielą się na parki narodowe, rezerwaty, dwa typy Natury
+2000 i kilka dalszych kategorii. Rodzaj siedzi w atrybucie `Layer` materiałów
+źródłowych — pozostałe atrybuty są bezużyteczne (`EntityHand` to uchwyt obiektu
+w DXF-ie, `Text` to nazwa wzoru kreskowania). Stały podpis dostają obszary
+powyżej 5 ha; mniejszych jest ponad tysiąc i podpisanie każdego zamieniłoby mapę
+w plątaninę, więc pokazują nazwę po najechaniu.
 Obie są domyślnie wyłączone, a działki wczytują się dopiero po włączeniu —
 ważą tyle co reszta wariantu razem wzięta, a do pytania „czy mój dom jest
 zajęty" nie są potrzebne. Bez tego wejście na stronę kosztowałoby 460 kB
