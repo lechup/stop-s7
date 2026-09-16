@@ -251,11 +251,11 @@ def policz(wariant, postep=None):
   skarp), a uproszczona buforuje os takze pod tunelem — rozdzielenie sprowadza
   obie metody do tej samej definicji.
 
-  Zwraca (GeoDataFrame adresow, warstwy korytarza, czy slad jest szacowany)."""
+  Zwraca (GeoDataFrame adresow, warstwy korytarza)."""
   nazwy = geometria.nazwy_warstw(wariant)
-  slad_pelny, szacowany = geometria.slad_drogi(wariant, postep)
+  slad_pelny = geometria.slad_drogi(wariant, postep)
   if slad_pelny is None:
-    return None, None, False
+    return None, None
 
   pas = geometria.pas_tunelu(wariant, nazwy)
   if pas is None:
@@ -268,7 +268,7 @@ def policz(wariant, postep=None):
 
   adresy = wczytaj_adresy(korytarz)
   if adresy.empty:
-    return adresy.assign(odleglosc_m=[], strefa=[]), warstwy, szacowany
+    return adresy.assign(odleglosc_m=[], strefa=[]), warstwy
 
   # Odleglosc liczymy do poszczegolnych czesci korytarza, nie do calosci —
   # drzewo STR odsiewa wtedy dalekie czesci zamiast porownywac kazdy punkt
@@ -280,7 +280,7 @@ def policz(wariant, postep=None):
       adresy, czesci, max_distance=float(max(consts.STREFY)),
       distance_col="odleglosc_m", how="inner")
   if pary.empty:
-    return adresy.iloc[0:0].assign(odleglosc_m=[], strefa=[]), warstwy, szacowany
+    return adresy.iloc[0:0].assign(odleglosc_m=[], strefa=[]), warstwy
 
   # sjoin_nearest zwraca po wierszu na kazda remisujaca czesc korytarza.
   pary = pary.sort_values("odleglosc_m").groupby(level=0).first()
@@ -304,7 +304,7 @@ def policz(wariant, postep=None):
       # Punkt tuz przy krawedzi moze miec odleglosc 0 i nie byc "wewnatrz".
       strefy.append(_strefa(odl) or nazwy_stref()[2])
   wynik["strefa"] = strefy
-  return wynik, warstwy, szacowany
+  return wynik, warstwy
 
 
 def _dopisz_strefy(wiersz, przedrostek, strefy):
@@ -326,7 +326,65 @@ def _dopisz_strefy(wiersz, przedrostek, strefy):
     poprzedni = prog
 
 
-def podsumuj(wariant, adresy, szacowany=False, budynki=None):
+# Warstwy terenowe: nazwa warstwy w GPKG -> nazwa kolumny w podsumowaniu.
+# Wszystkie sa poligonowe i liczymy dla nich POWIERZCHNIE korytarza, ktora na
+# nie przypada — inaczej niz przy adresach i budynkach, gdzie liczymy obiekty.
+# Osuwiska, tereny zalewowe i obszary chronione to nie jest "co zostanie
+# zburzone", tylko "przez co droga ma przejsc".
+WARSTWY_TERENU = {
+    "osuwiska": "osuwiska [ha]",
+    "ruchy_masowe": "ruchy masowe [ha]",
+    "powodz": "tereny zalewowe [ha]",
+    "chronione": "obszary chronione [ha]",
+}
+PLIK_KONTEKSTU = "warianty/kontekst.gpkg"
+
+_kontekst = {}
+
+
+def wczytaj_kontekst(warstwa):
+  """Warstwa terenowa wspolna dla wszystkich wariantow (None, gdy jej nie ma).
+
+  Trzymana w jednym pliku, bo jest identyczna we wszystkich wariantach —
+  szesc kopii kosztowaloby 255 MB nadmiaru."""
+  if warstwa not in _kontekst:
+    try:
+      gdf = gpd.read_file(PLIK_KONTEKSTU, layer=warstwa).to_crs(consts.CRS_METRYCZNY)
+      _kontekst[warstwa] = shapely.union_all(shapely.make_valid(gdf.geometry.values))
+    except Exception:
+      _kontekst[warstwa] = None
+  return _kontekst[warstwa]
+
+
+def miary_terenu(wariant, korytarz):
+  """Ile korytarza przypada na dzialki ewidencyjne i tereny wrazliwe.
+
+  Dzialki sa wlasne dla wariantu (przyciete do jego obszaru), reszta wspolna."""
+  wynik = {}
+
+  try:
+    dzialki = gpd.read_file(geometria.sciezka(wariant), layer="dzialki")
+    dzialki = dzialki.to_crs(consts.CRS_METRYCZNY)
+    dzialki["geometry"] = shapely.make_valid(dzialki.geometry.values)
+    trafione = dzialki.iloc[sorted(set(
+        dzialki.sindex.query(korytarz, predicate="intersects")))]
+    zajete = shapely.area(shapely.intersection(
+        shapely.union_all(trafione.geometry.values), korytarz)) if len(trafione) else 0
+    wynik["działki"] = len(trafione)
+    wynik["zajęte [ha]"] = round(zajete / 10000, 1)
+  except Exception:
+    pass
+
+  for warstwa, kolumna in WARSTWY_TERENU.items():
+    obszar = wczytaj_kontekst(warstwa)
+    if obszar is None:
+      continue
+    wynik[kolumna] = round(
+        shapely.area(shapely.intersection(korytarz, obszar)) / 10000, 1)
+  return wynik
+
+
+def podsumuj(wariant, adresy, budynki=None, teren=None):
   """Wiersz podsumowania: strefy rozlaczne + kolumny narastajace.
 
   Budynki dostaja te sama siatke stref co adresy — osobno wszystkie, osobno
@@ -359,37 +417,9 @@ def podsumuj(wariant, adresy, szacowany=False, budynki=None):
       _dopisz_strefy(wiersz, przedrostek,
                      wybrane["strefa"] if len(wybrane) else puste)
 
-  wiersz["szacunek"] = "tak" if szacowany else ""
+  if teren:
+    wiersz.update(teren)
   return wiersz
-
-
-def kontrola(wariant):
-  """Kontrola krzyzowa: adresy w gotowym buforze 200 m z materialow zrodlowych.
-
-  Autorzy materialow dolaczyli wlasny bufor 200 m wokol osi S7. Policzenie
-  adresow w nim i porownanie z nasza kolumna "≤200 m" pokazuje, czy nasze
-  liczenie jest poprawne. Bufor dotyczy samej S7 (bez BDI), wiec porownujemy
-  go z uproszczonym sladem liczonym tylko dla osi S7."""
-  nazwy = geometria.nazwy_warstw(wariant)
-  bufor = geometria.wczytaj(wariant, "bufor200", nazwy)
-  if not len(bufor):
-    return None
-  obszar = shapely.union_all(bufor.values)
-  adresy = wczytaj_adresy(obszar)
-  if adresy.empty:
-    return {"wariant": wariant, "w_buforze_zrodlowym": 0, "nasze_200m": 0}
-
-  w_buforze = len(adresy.sindex.query(obszar, predicate="contains"))
-
-  os_s7 = geometria.wczytaj(wariant, "os", nazwy)
-  nasz = shapely.buffer(shapely.union_all(os_s7.values), max(consts.STREFY))
-  nasze_200 = len(adresy.sindex.query(nasz, predicate="contains"))
-  return {
-      "wariant": wariant,
-      "w_buforze_zrodlowym": w_buforze,
-      "nasze_200m": nasze_200,
-      "roznica_%": round(100 * (nasze_200 - w_buforze) / w_buforze, 2) if w_buforze else None,
-  }
 
 
 def _tekst(wartosc):
@@ -412,12 +442,6 @@ def zapisz_liste_rozbiorek():
   Sklada sie z plikow wariant-*-rozbiorka.csv lezacych na dysku, nie z danych
   w pamieci — dzieki temu jest kompletna takze wtedy, gdy przeliczany byl
   tylko jeden wariant."""
-  sciezka_pods = "{}/podsumowanie.csv".format(KATALOG_WYNIKOW)
-  szacunki = {}
-  if os.path.exists(sciezka_pods):
-    pods = pd.read_csv(sciezka_pods).fillna({"szacunek": ""})
-    szacunki = dict(zip(pods["wariant"], pods["szacunek"] == "tak"))
-
   stan = stan_danych()
   L = ["# Adresy w śladzie planowanej drogi S7", ""]
   L.append("> **To wyliczenie, nie oficjalna lista wywłaszczeń.** Zestawienie powstało")
@@ -430,7 +454,6 @@ def zapisz_liste_rozbiorek():
   L.append(">")
   L.append("> - punkt adresowy PRG to współrzędna, a nie obrys budynku — dom może stać")
   L.append(">   kilka metrów od punktu, więc pojedyncze trafienia mogą być mylne,")
-  L.append("> - **wariant B jest szacunkiem** — materiały nie zawierają dla niego warstw skarp,")
   L.append("> - kategoria „nad tunelem” zakłada budowę metodą odkrywkową, czego materiały")
   L.append(">   nie rozstrzygają; nad tunelem drążonym budynki zostają,")
   L.append("> - dane adresowe: PRG (GUGiK){}.".format(
@@ -447,15 +470,8 @@ def zapisz_liste_rozbiorek():
     if not os.path.exists(plik):
       continue
     adresy = pd.read_csv(plik)
-    szacowany = szacunki.get(wariant, False)
-    L.append("## Wariant {}{}".format(wariant, " — SZACUNEK" if szacowany else ""))
+    L.append("## Wariant {}".format(wariant))
     L.append("")
-    if szacowany:
-      L.append("> Materiały nie zawierają dla tego wariantu warstw skarp. Ślad")
-      L.append("> policzono z samego pobocza, poszerzonego o średni margines")
-      L.append("> {:.1f} m na stronę, zmierzony na pozostałych wariantach.".format(
-          consts.MARGINES_SKARP))
-      L.append("")
     if adresy.empty:
       L.append("_Brak adresów._\n")
       continue
@@ -487,7 +503,7 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
   podsumowania = []
   for wariant in warianty:
     postep("Wariant {}:".format(wariant))
-    adresy, warstwy, szacowany = policz(wariant, postep)
+    adresy, warstwy = policz(wariant, postep)
     if adresy is None:
       postep("  pomijam — brak warstw opisujacych droge")
       continue
@@ -527,12 +543,12 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
         adresy.to_file(sciezka_gpkg, driver="GPKG",
                        layer=WARSTWA_ADRESY, mode="a")
 
-    wiersz = podsumuj(wariant, adresy, szacowany, budynki)
+    teren = miary_terenu(wariant, warstwy["korytarz"])
+    wiersz = podsumuj(wariant, adresy, budynki, teren)
     podsumowania.append(wiersz)
-    postep("  do rozbiorki {} ({} w sladzie + {} nad tunelem), ≤200 m {}{}".format(
+    postep("  do rozbiorki {} ({} w sladzie + {} nad tunelem), ≤200 m {}".format(
         wiersz[DO_ROZBIORKI], wiersz[W_SLADZIE], wiersz[NAD_TUNELEM],
-        wiersz["≤{} m".format(consts.STREFY[-1])],
-        "  [SZACUNEK]" if szacowany else ""))
+        wiersz["≤{} m".format(consts.STREFY[-1])],))
     if budynki is not None:
       postep("  budynkow w korytarzu {} (mieszkalnych {}), ≤200 m {}".format(
           wiersz[BUDYNKI], wiersz[BUDYNKI_MIESZKALNE],
@@ -550,7 +566,7 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
   # z tabeli wyniki pozostalych wariantow.
   sciezka = "{}/podsumowanie.csv".format(KATALOG_WYNIKOW)
   if os.path.exists(sciezka) and len(warianty) < len(consts.VARIANTS):
-    stara = pd.read_csv(sciezka).fillna({"szacunek": ""})
+    stara = pd.read_csv(sciezka)
     stara = stara[~stara["wariant"].isin(tabela["wariant"])]
     tabela = pd.concat([stara, tabela], ignore_index=True)
   tabela = tabela.reindex(
@@ -558,7 +574,7 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
   # Int64 (z wielka litera) dopuszcza braki, wiec wariant policzony bez
   # budynkow zostaje pusty zamiast zamieniac cala kolumne na 225.0.
   for kolumna in tabela.columns:
-    if kolumna.startswith(BUDYNKI):
+    if kolumna.startswith(BUDYNKI) or kolumna == "działki":
       tabela[kolumna] = tabela[kolumna].astype("Int64")
   tabela = tabela.sort_values("wariant").reset_index(drop=True)
   tabela.to_csv(sciezka, index=False)
@@ -567,12 +583,9 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
   # komplet i tak idzie do podsumowanie.csv.
   skrot = ["wariant", W_SLADZIE, NAD_TUNELEM, DO_ROZBIORKI,
            "≤{} m".format(consts.STREFY[-1]), BUDYNKI, BUDYNKI_MIESZKALNE,
-           BUDYNKI_OSWIATA, BUDYNKI_ZDROWIE, "szacunek"]
+           BUDYNKI_OSWIATA, BUDYNKI_ZDROWIE, "działki", "zajęte [ha]"]
   skrot = [k for k in skrot if k in tabela.columns]
   postep("\n" + tabela[skrot].to_string(index=False))
-  if any(w["szacunek"] for w in podsumowania):
-    postep("\n[SZACUNEK] — brak warstw skarp w materialach; slad z pobocza"
-           " poszerzony o {:.1f} m na strone.".format(consts.MARGINES_SKARP))
   postep("\nZapisano {}/podsumowanie.csv i {}/rozbiorka.md".format(
       KATALOG_WYNIKOW, KATALOG_WYNIKOW))
   return tabela
@@ -597,7 +610,7 @@ def informacje_o_danych():
       print("  {}: BRAK PLIKU {}".format(wariant, sciezka_gml))
       continue
     nazwy = geometria.nazwy_warstw(wariant)
-    braki = [r for r in ("os", "jezdnia", "skarpy") if not consts.dopasuj(nazwy, r)]
+    braki = [r for r in consts.WARSTWY_SLADU + ["os"] if r not in nazwy]
     print("  {}: warstw {:<3} {}".format(
         wariant, len(nazwy),
         "komplet" if not braki else "brak: " + ", ".join(braki)))
@@ -611,11 +624,9 @@ def debug():
     nazwy = geometria.nazwy_warstw(wariant)
     for nazwa in nazwy:
       info = pyogrio.read_info(sciezka, layer=nazwa)
-      role = [r for r in consts.WZORCE if consts.dopasuj([nazwa], r)]
-      print("  {:<46} {:<16} n={:<6} {}".format(
-          nazwa, str(info.get("geometry_type")), info.get("features"),
-          ",".join(role) or "-"))
-    braki = [r for r in ("os", "jezdnia", "skarpy") if not consts.dopasuj(nazwy, r)]
+      print("  {:<24} {:<16} n={}".format(
+          nazwa, str(info.get("geometry_type")), info.get("features")))
+    braki = [r for r in consts.WARSTWY_SLADU + ["os"] if r not in nazwy]
     print("  BRAKI: {}\n".format(", ".join(braki) if braki else "brak"))
 
 def _rozbierz_zapytanie(zapytanie):
@@ -675,12 +686,6 @@ def sprawdz_adres(zapytanie, postep=print):
         shapely.union_all(powierzchnia.geometry.values) if not powierzchnia.empty else None,
     )
 
-  szacunki = {}
-  sciezka = "{}/podsumowanie.csv".format(KATALOG_WYNIKOW)
-  if os.path.exists(sciezka):
-    pods = pd.read_csv(sciezka).fillna({"szacunek": ""})
-    szacunki = dict(zip(pods["wariant"], pods["szacunek"] == "tak"))
-
   # Przy wielu trafieniach pelna tabelka na kazdy adres to sciana tekstu —
   # wtedy jedna linia na adres z najblizszym wariantem.
   zwiezle = len(znalezione) > SZCZEGOLOWO_DO
@@ -716,10 +721,10 @@ def sprawdz_adres(zapytanie, postep=print):
       else:
         strefa = _strefa(od_korytarza)
       if not zwiezle:
-        postep("  {:<9} {:>13.1f}m {:>15.1f}m   {}{}".format(
+        postep("  {:<9} {:>13.1f}m {:>15.1f}m   {}".format(
             wariant, od_korytarza,
             od_powierzchni if od_powierzchni is not None else float("nan"),
-            strefa, "  [SZACUNEK]" if szacunki.get(wariant) else ""))
+            strefa))
       wiersz = {"adres": opis, "wariant": wariant,
                 "odleglosc_m": round(od_korytarza, 1), "strefa": strefa}
       wiersze_adresu.append(wiersz)

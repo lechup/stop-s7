@@ -145,11 +145,7 @@ def indeks_adresow(korytarze, powierzchnie):
 if __name__ == "__main__":
   os.makedirs(KATALOG, exist_ok=True)
 
-  korytarze, powierzchnie, szacunki = {}, {}, {}
-  import pandas as pd
-  podsumowanie = pd.read_csv("{}/podsumowanie.csv".format(
-      functions.KATALOG_WYNIKOW)).fillna({"szacunek": ""})
-  szacunki = dict(zip(podsumowanie["wariant"], podsumowanie["szacunek"] == "tak"))
+  korytarze, powierzchnie = {}, {}
 
   razem = 0
   for wariant in consts.VARIANTS:
@@ -172,7 +168,6 @@ if __name__ == "__main__":
   wiersze = indeks_adresow(korytarze, powierzchnie)
   rozmiar = zapisz_json("{}/adresy-index.json".format(KATALOG), {
       "warianty": consts.VARIANTS,
-      "szacunek": [bool(szacunki.get(w)) for w in consts.VARIANTS],
       "progi": consts.STREFY,
       "promien": PROMIEN_INDEKSU,
       "adresy": wiersze,

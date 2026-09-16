@@ -1,171 +1,63 @@
-# Warstwy w plikach GML wariantów
+# Warstwy w plikach wariantów
 
-Inwentarz wygenerowany z plików `warianty/wariant*.gml` (`pyogrio.list_layers`
-+ `read_info`). Służy za podstawę wzorców w [consts.py](consts.py) — nazwy warstw
-są niespójne między wariantami, więc dopasowujemy je regexem, a nie listą.
+Dane pochodzą z serwisów konsultacyjnych STEŚ (`wariant-w*.s7-krakow-myslenice-stes.pl`),
+wydanie z **3 listopada 2025** (potwierdzone nagłówkiem `Last-Modified`).
+Pobiera je i składa [pobierz_warianty.py](pobierz_warianty.py).
 
-## Role i wzorce
+Nazwa warstwy w GPKG **jest** jej rolą — w przeciwieństwie do wcześniejszych
+plików GML, gdzie numeracja i sufiksy różniły się między wariantami i trzeba
+je było dopasowywać wzorcem.
 
-| rola | wzorzec | do czego |
+## Warstwy własne wariantu
+
+Plik `warianty/wariant-X.gpkg`.
+
+| warstwa | A | B | C | D | E | F | rola |
+|---|---|---|---|---|---|---|---|
+| `dzialki` | 7871 | 7599 | 8386 | 7856 | 10353 | 12894 | **miara** — działki ewidencyjne |
+| `estakady` | 43 | 34 | 29 | 32 | 18 | 34 | **składnik śladu** — estakady i mosty |
+| `jezdnia` | 10 | 28 | 30 | 26 | 12 | 6 | **składnik śladu** — krawędzie pobocza |
+| `kilometraz_100m` | 298 | 296 | 287 | 263 | 285 | 293 | kilometraż co 100 m |
+| `kilometraz_1km` | 31 | 30 | 29 | 27 | 29 | 30 | kilometraż co 1 km |
+| `krawedzie` | 20 | 54 | 60 | 30 | 21 | 12 | krawędzie jezdni |
+| `mop` | 1 | 2 | 2 | 2 | 3 | 3 | proponowane MOP-y |
+| `nazwy_wezlow` | 6 | 6 | 6 | 4 | 7 | 5 | nazwy węzłów |
+| `os` | 6 | 14 | 15 | 2 | 1 | 4 | oś trasy S7 |
+| `os_bdi` | 5 | 4 | 5 | — | — | — | oś drogi towarzyszącej |
+| `os_tunel` | 5 | 6 | 6 | 2 | 1 | 2 | odcinki tunelowe S7 |
+| `os_tunel_bdi` | 2 | 3 | 4 | — | — | — | odcinki tunelowe BDI |
+| `skarpy` | 16129 | 14401 | 13443 | 15139 | 19444 | 16215 | **składnik śladu** — linie skarp |
+| `tunele` | 7 | 7 | 8 | 3 | 2 | 3 | poligony tuneli |
+| `uklad_wezlow` | 60 | 49 | 71 | 61 | 34 | 53 | układ dróg w węzłach |
+| `wezly` | 5 | 5 | 5 | — | — | — | węzły drogowe |
+| `zakres_budowy` | 72 | 78 | 74 | 47 | 38 | 45 | schemat zakresu budowy |
+
+## Warstwy wspólne
+
+Plik `warianty/kontekst.gpkg`. Są **bajt w bajt identyczne** we wszystkich
+wariantach — sprawdzone sumami sha256 pobranych plików — więc trzymanie ich
+w sześciu kopiach kosztowałoby 255 MB nadmiaru.
+
+| warstwa | obiektów | rola |
 |---|---|---|
-| `os` | `^otrasyS7_\d+(___2_)?$` | oś trasy S7 — cięcie na kafelki, metoda uproszczona |
-| `os_bdi` | `^otrasyBDI_\d+(___2_)?$` | oś BDI (droga towarzysząca) — objęta tymi samymi warstwami krawędzi |
-| `os_tunel` | `^otrasyS7wtunelu_\d+(___2_)?$` | odcinki w tunelu |
-| `jezdnia` | `^pobocze_\d+(___2_)?$` | krawędzie jezdni — składnik śladu |
-| `skarpy` | `^\d*(skarpy_)?part_[a-z]{2}(___2_)?$` | linie skarp — zewnętrzny obrys zajęcia terenu |
-| `tunele` | `^projektowanetunele_\d+(___2_)?$` | poligony tuneli |
-| `estakady` | `^projektowaneestakadyimosty_\d+(___2_)?$` | poligony estakad i mostów |
-| `mop` | `^proponowanalokalizacjaMOP_\d+(___2_)?$` | proponowane lokalizacje MOP |
-| `bufor200` | `^(otrasyS7_\d+|trasa)\.json$` | gotowy bufor 200 m od autorów materiałów — kontrola krzyżowa |
-| `bufor500` | `^(otrasyS7_\d+|trasa)\.json___2_$` | gotowy bufor 500 m od autorów materiałów |
+| `chronione` | 13 | **miara** — obszary chronione przyrodniczo |
+| `gminy` | 32 | granice gmin |
+| `obreby` | 686 | granice obrębów ewidencyjnych |
+| `osuwiska` | 3 | **miara** — obszary osuwiskowe |
+| `pomniki_przyrody` | 7616 | pomniki przyrody |
+| `powiaty` | 4 | granice powiatów |
+| `powodz` | 5 | **miara** — tereny zalewowe |
+| `ruchy_masowe` | 1 | **miara** — zagrożenie ruchami masowymi |
+| `s52` | 20088 | przebieg S52 |
 
-## Dopasowanie per wariant
+## Kalibracja śladu
 
-| wariant | oś S7 | jezdnia | skarpy | tunele | bufor 200 m |
-|---|---|---|---|---|---|
-| A | 1 | 1 | 4 | 1 | 1 |
-| B | 1 | 1 | **brak** | 1 | 1 |
-| C | 1 | 1 | 3 | 1 | 1 |
-| D | 1 | 1 | 4 | 1 | 1 |
-| E | 1 | 1 | 4 | **brak** | 1 |
-| F | 1 | 1 | 4 | 1 | 1 |
+Ślad drogi składany jest z warstw `jezdnia`, `skarpy` i `estakady`.
+Pierwsze dwie to linie i łączy je domknięcie morfologiczne o promieniu
+**25 m**; poniżej 20 m linie skarp się nie domykają i ślad rozpada się na
+kawałki, a od 20 m wynik wchodzi na płaskowyż.
 
-Wariant **B nie ma warstw skarp** — liczy się dla niego wyłącznie metodą
-uproszczoną. Wariant **E nie ma tuneli**. Pozostałe mają komplet.
-
-## Pełny wykaz
-
-### Wariant A
-
-| warstwa | typ | obiektów | rola |
-|---|---|---|---|
-| `otrasyBDI_15.json` | MultiPolygon | 4 | — |
-| `otrasyS7_27.json` | MultiPolygon | 6 | `bufor200` |
-| `otrasyBDI_15.json___2_` | MultiPolygon | 4 | — |
-| `otrasyS7_27.json___2_` | MultiPolygon | 6 | `bufor500` |
-| `otrasyS7_27___2_` | MultiLineString | 6 | `os` |
-| `otrasyBDI_15___2_` | MultiLineString | 5 | `os_bdi` |
-| `otrasyBDIwtunelu_14___2_` | MultiLineString | 2 | — |
-| `otrasyS7wtunelu_26___2_` | MultiLineString | 5 | `os_tunel` |
-| `projektowanetunele_20___2_` | MultiPolygon | 7 | `tunele` |
-| `projektowaneestakadyimosty_21___2_` | MultiPolygon | 43 | `estakady` |
-| `proponowanalokalizacjaMOP_16___2_` | MultiPolygon | 1 | `mop` |
-| `proponowanyukaddrogowywzwdrogowych_18___2_` | MultiLineString | 60 | — |
-| `schematizakresbudowylubprzebudowy_22___2_` | MultiLineString | 70 | — |
-| `pobocze_25___2_` | MultiLineString | 10 | `jezdnia` |
-| `part_aa___2_` | MultiLineString | 5000 | `skarpy` |
-| `part_ab___2_` | MultiLineString | 5000 | `skarpy` |
-| `part_ac___2_` | MultiLineString | 5000 | `skarpy` |
-| `part_ad___2_` | MultiLineString | 1129 | `skarpy` |
-
-### Wariant B
-
-| warstwa | typ | obiektów | rola |
-|---|---|---|---|
-| `otrasyS7_27.json` | MultiPolygon | 6 | `bufor200` |
-| `otrasyBDI_15.json` | MultiPolygon | 3 | — |
-| `otrasyS7_27.json___2_` | MultiPolygon | 6 | `bufor500` |
-| `otrasyBDI_15.json___2_` | MultiPolygon | 3 | — |
-| `otrasyS7_27___2_` | MultiLineString | 14 | `os` |
-| `otrasyS7wtunelu_26___2_` | MultiLineString | 6 | `os_tunel` |
-| `otrasyBDI_15___2_` | MultiLineString | 4 | `os_bdi` |
-| `otrasyBDIwtunelu_14___2_` | MultiLineString | 3 | — |
-| `pobocze_25___2_` | MultiLineString | 28 | `jezdnia` |
-| `projektowaneestakadyimosty_21___2_` | MultiPolygon | 34 | `estakady` |
-| `projektowanetunele_20___2_` | MultiPolygon | 7 | `tunele` |
-
-### Wariant C
-
-| warstwa | typ | obiektów | rola |
-|---|---|---|---|
-| `otrasyBDI_15.json` | MultiPolygon | 4 | — |
-| `otrasyS7_27.json` | MultiPolygon | 6 | `bufor200` |
-| `otrasyBDI_15.json___2_` | MultiPolygon | 4 | — |
-| `otrasyS7_27.json___2_` | MultiPolygon | 6 | `bufor500` |
-| `otrasyS7_27___2_` | MultiLineString | 15 | `os` |
-| `otrasyS7wtunelu_26___2_` | MultiLineString | 6 | `os_tunel` |
-| `otrasyBDI_15___2_` | MultiLineString | 5 | `os_bdi` |
-| `otrasyBDIwtunelu_14___2_` | MultiLineString | 4 | — |
-| `pobocze_25___2_` | MultiLineString | 30 | `jezdnia` |
-| `projektowaneestakadyimosty_21___2_` | MultiPolygon | 29 | `estakady` |
-| `projektowanetunele_20___2_` | MultiPolygon | 8 | `tunele` |
-| `proponowanalokalizacjaMOP_16___2_` | MultiPolygon | 2 | `mop` |
-| `proponowanyukaddrogowywzwdrogowych_18___2_` | MultiLineString | 71 | — |
-| `schematizakresbudowylubprzebudowy_22___2_` | MultiLineString | 67 | — |
-| `skarpy_part_aa___2_` | MultiLineString | 5000 | `skarpy` |
-| `skarpy_part_ab___2_` | MultiLineString | 5000 | `skarpy` |
-| `skarpy_part_ac___2_` | MultiLineString | 3443 | `skarpy` |
-
-### Wariant D
-
-| warstwa | typ | obiektów | rola |
-|---|---|---|---|
-| `otrasyS7_24.json` | MultiPolygon | 1 | `bufor200` |
-| `otrasyS7_24.json___2_` | MultiPolygon | 1 | `bufor500` |
-| `otrasyS7_24___2_` | MultiLineString | 2 | `os` |
-| `otrasyS7wtunelu_23___2_` | MultiLineString | 2 | `os_tunel` |
-| `pobocze_22___2_` | MultiLineString | 26 | `jezdnia` |
-| `projektowaneestakadyimosty_18___2_` | MultiPolygon | 32 | `estakady` |
-| `projektowanetunele_17___2_` | MultiPolygon | 3 | `tunele` |
-| `proponowanalokalizacjaMOP_14___2_` | MultiPolygon | 2 | `mop` |
-| `proponowanyukaddrogowywzwdrogowych_16___2_` | MultiLineString | 60 | — |
-| `schematizakresbudowylubprzebudowy_19___2_` | MultiLineString | 38 | — |
-| `skarpy_part_aa___2_` | MultiLineString | 5000 | `skarpy` |
-| `skarpy_part_ab___2_` | MultiLineString | 5000 | `skarpy` |
-| `skarpy_part_ac___2_` | MultiLineString | 5000 | `skarpy` |
-| `skarpy_part_ad___2_` | MultiLineString | 139 | `skarpy` |
-
-### Wariant E
-
-| warstwa | typ | obiektów | rola |
-|---|---|---|---|
-| `trasa.json` | MultiPolygon | 1 | `bufor200` |
-| `trasa.json___2_` | MultiPolygon | 1 | `bufor500` |
-| `proponowanalokalizacjaMOP_14` | MultiPolygon | 3 | `mop` |
-| `otrasyS7_25` | MultiLineString | 1 | `os` |
-| `pobocze_23` | MultiLineString | 12 | `jezdnia` |
-| `schematizakresbudowylubprzebudowy_20` | MultiLineString | 33 | — |
-| `proponowanyukaddrogowywzwdrogowych_17` | MultiLineString | 34 | — |
-| `2part_aa` | MultiLineString | 5000 | `skarpy` |
-| `part_ab` | MultiLineString | 5000 | `skarpy` |
-| `part_ac` | MultiLineString | 5000 | `skarpy` |
-| `part_ad` | MultiLineString | 4444 | `skarpy` |
-
-### Wariant F
-
-| warstwa | typ | obiektów | rola |
-|---|---|---|---|
-| `otrasyS7_24.json` | MultiPolygon | 1 | `bufor200` |
-| `otrasyS7_24.json___2_` | MultiPolygon | 1 | `bufor500` |
-| `otrasyS7_24___2_` | MultiLineString | 4 | `os` |
-| `otrasyS7wtunelu_23___2_` | MultiLineString | 2 | `os_tunel` |
-| `pobocze_22___2_` | MultiLineString | 6 | `jezdnia` |
-| `projektowaneestakadyimosty_18___2_` | MultiPolygon | 34 | `estakady` |
-| `projektowanetunele_17___2_` | MultiPolygon | 3 | `tunele` |
-| `proponowanalokalizacjaMOP_14___2_` | MultiPolygon | 3 | `mop` |
-| `proponowanyukaddrogowywzwdrogowych_16___2_` | MultiLineString | 53 | — |
-| `schematizakresbudowylubprzebudowy_19___2_` | MultiLineString | 32 | — |
-| `skarpy_part_aa___2_` | MultiLineString | 5000 | `skarpy` |
-| `skarpy_part_ab___2_` | MultiLineString | 5000 | `skarpy` |
-| `skarpy_part_ac___2_` | MultiLineString | 5000 | `skarpy` |
-| `skarpy_part_ad___2_` | MultiLineString | 1215 | `skarpy` |
-
-## Kalibracja promienia domknięcia
-
-Ślad drogi powstaje z linii przez domknięcie morfologiczne
-`buffer(+r).buffer(-r)`. Pomiar na kafelku 1×1 km w środku trasy wariantu A:
-
-| r | pole | części | śr. szerokość |
-|---|---|---|---|
-| 15 m | 1,43 ha | 5 | 12,2 m |
-| 20 m | 4,93 ha | 1 | 42,0 m |
-| 25 m | 4,98 ha | 1 | 42,4 m |
-| 30 m | 5,01 ha | 1 | 42,7 m |
-
-Poniżej 20 m linie się nie domykają i ślad rozpada się na kawałki. Od 20 m
-wynik wchodzi na płaskowyż, więc `PROMIEN_DOMKNIECIA = 25` leży w środku
-stabilnego zakresu i nie jest wrażliwy na dobór wartości.
-
-Warstwa `schematizakresbudowylubprzebudowy_*` mimo obiecującej nazwy **nie
-daje się `polygonize`** (0 poligonów) — nie jest gotowym obrysem zajęcia terenu.
+Estakady są już poligonami i dochodzą wprost. Bez nich ślad miałby dziury:
+tam, gdzie droga idzie po estakadzie, nie ma nasypu, więc nie ma i linii
+skarp — a budynek pod projektowaną estakadą jest zajęty tak samo.
 

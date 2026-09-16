@@ -12,17 +12,15 @@ import argparse
 
 import consts
 import functions
-import geometria
 
 parser = argparse.ArgumentParser(
     description="Statystyki S7 — ile adresow lezy w sladzie drogi i w strefach od niego."
 )
 parser.add_argument(
     "--mode",
-    choices=[consts.GENERATE_CHOICE, consts.DEBUG_CHOICE, "margines", "dane"],
+    choices=[consts.GENERATE_CHOICE, consts.DEBUG_CHOICE, "dane"],
     default=consts.GENERATE_CHOICE,
     help="'generate' liczy raporty, 'debug' wypisuje warstwy w plikach GML, "
-         "'margines' przelicza sredni margines skarp, "
          "'dane' pokazuje na jakich danych skrypt liczy"
 )
 parser.add_argument(
@@ -52,8 +50,6 @@ if __name__ == "__main__":
         functions.debug()
     elif args.mode == "dane":
         functions.informacje_o_danych()
-    elif args.mode == "margines":
-        geometria.zmierz_margines(args.wariant)
     else:
         functions.generate(
             warianty=args.wariant,

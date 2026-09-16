@@ -16,8 +16,7 @@ Przykłady:
 ```bash
 ./uruchom.sh --wariant A --wariant C   # wybrane warianty
 ./uruchom.sh --bez-sladu               # bez zapisu GPKG
-./uruchom.sh --mode debug              # wykaz warstw w plikach GML
-./uruchom.sh --mode margines           # przelicz średni margines skarp
+./uruchom.sh --mode debug              # wykaz warstw w plikach wariantów
 ./uruchom.sh --mode dane               # na jakich danych skrypt liczy
 ./uruchom.sh --adres "Osterwy 41P"     # sprawdź pojedynczy adres
 LIMIT=8G ./uruchom.sh                  # podnieś limit pamięci
@@ -36,33 +35,14 @@ zajęty pod budowę, średnio 46–49 m szerokości. Warstwy opisujące drogę t
 (krawędzie jezdni, skarpy), nie poligony, więc ślad składany jest z nich przez
 domknięcie morfologiczne. Szczegóły i kalibracja: [warstwy.md](warstwy.md).
 
-### Wariant B jest szacowany
-
-Materiały nie zawierają dla wariantu B warstw skarp — ma tylko krawędzie jezdni.
-Jego ślad liczony jest więc z samego pobocza i poszerzany o średni margines skarp
-zmierzony na pozostałych wariantach:
-
-| wariant | margines skarp na stronę |
-|---|---|
-| A | +8,7 m |
-| C | +9,2 m |
-| D | +5,3 m |
-| E | +5,6 m |
-| F | +9,6 m |
-| **średnia** | **+7,7 m** |
-
-Ślad wariantu B powstaje więc z jego własnych krawędzi jezdni, poszerzonych
-o 7,7 m w każdą stronę. Rozrzut źródłowy (od +5,3 do +9,6 m) przekłada się na
-niepewność rzędu ±2 m szerokości śladu, więc **liczby dla B są szacunkiem** —
-oznaczonym w kolumnie `szacunek` w podsumowaniu i nagłówkiem w `rozbiorka.md`.
-
-Margines siedzi w `MARGINES_SKARP` w [consts.py](consts.py); przelicza go
-`./uruchom.sh --mode margines`.
-
 ### Tunele
 
 Odcinki tunelowe leżą w osobnej warstwie (`otrasyS7wtunelu_*`, `otrasyBDIwtunelu_*`)
-i stanowią od 12% do 26% długości trasy — poza wariantem E, który tuneli nie ma.
+i stanowią istotną część długości trasy w każdym z wariantów.
+
+> Do wydania z listopada 2025 raport twierdził, że wariant E tuneli nie ma.
+> Wynikało to z braku warstwy w plikach GML, których używaliśmy wcześniej —
+> materiały źródłowe pokazują dla E 5,24 km odcinków tunelowych.
 
 Nad tunelem drążonym budynki zostają, ale nad tunelem budowanym metodą odkrywkową
 teren jest rozkopany na całej szerokości i budynki znikają tak samo jak na
@@ -89,7 +69,7 @@ W katalogu `raporty/`:
 
 | plik | zawartość |
 |---|---|
-| `podsumowanie.csv` | wiersz na wariant, liczby w strefach, kolumna `szacunek` |
+| `podsumowanie.csv` | wiersz na wariant: strefy, budynki, działki i tereny wrażliwe |
 | `rozbiorka.md` | listy adresów do rozbiórki, pogrupowane po miejscowościach |
 | `wariant-X-rozbiorka.csv` | te same adresy w formie tabelarycznej |
 | `wariant-X-adresy.csv` | wszystkie adresy do 200 m: odległość i strefa |
@@ -220,6 +200,31 @@ Gdyby trasa kiedyś dotknęła zabudowy wielorodzinnej, jedyne realne drogi to
 pełny EGiB ze starostwa (ewidencja prowadzi lokale jako osobne obiekty; bezpłatna
 jest tylko geometria z podstawowymi atrybutami) albo wniosek do GUS o NOBC.
 
+### Działki i tereny wrażliwe
+
+Poza adresami i budynkami raport podaje miary dotyczące **samej drogi**, a nie
+tego, co przy niej stoi. Liczone są dla korytarza, czyli śladu razem z pasem
+nad tunelem:
+
+| kolumna | co znaczy |
+|---|---|
+| `działki` | ile działek ewidencyjnych przecina korytarz |
+| `zajęte [ha]` | powierzchnia tych działek przypadająca na korytarz |
+| `osuwiska [ha]` | ile korytarza przechodzi przez obszary osuwiskowe |
+| `ruchy masowe [ha]` | obszary zagrożone ruchami masowymi ziemi |
+| `tereny zalewowe [ha]` | tereny zagrożone powodzią |
+| `obszary chronione [ha]` | obszary chronione przyrodniczo |
+
+Liczba działek jest istotna niezależnie od zabudowy: wywłaszczenie części
+działki dotyka właściciela także wtedy, gdy nie stoi na niej dom. Osuwiska
+i tereny zalewowe to z kolei argument inżynieryjny i kosztowy, a nie
+mieszkaniowy — mówią, przez co droga ma przejść, a nie co zburzy.
+
+Warstwy pochodzą z materiałów STEŚ. Działki są własne dla każdego wariantu
+(przycięte do jego obszaru), pozostałe są wspólne i leżą w `warianty/kontekst.gpkg`
+— są bajt w bajt identyczne we wszystkich wariantach, więc sześć kopii
+kosztowałoby 255 MB nadmiaru.
+
 ## Sprawdzanie pojedynczego adresu
 
 ```bash
@@ -234,7 +239,7 @@ Dla podanego adresu wypisuje odległość i strefę w każdym z wariantów:
 Juliusza Osterwy 41P, 30-699 Kraków
   wariant     od korytarza   od powierzchni   strefa
   A                3215.9m          3215.9m   poza 200 m
-  B                 100.9m           152.0m   50-200 m  [SZACUNEK]
+  B                 100.9m           152.0m   50-200 m
   C                 691.4m           691.4m   poza 200 m
 ```
 
@@ -246,17 +251,12 @@ ale wymaga wcześniejszego przeliczenia (`./uruchom.sh`).
 
 ## Wiarygodność
 
-Materiały źródłowe zawierają gotowy bufor 200 m wokół osi, policzony przez ich
-autorów. Zliczenie adresów w tym buforze i porównanie z naszą kolumną `≤200 m`
-daje niezależną kontrolę:
+Do wydania z listopada 2025 raport miał kontrolę krzyżową względem gotowego
+bufora 200 m, policzonego przez autorów materiałów — pliki GML go zawierały.
+Wychodziła na niej różnica −0,11% do −0,44%, czyli zgodność bardzo dobra.
 
-| wariant | bufor źródłowy | nasze ≤200 m | różnica |
-|---|---|---|---|
-| A | 903 | 902 | −0,11% |
-| C | 908 | 904 | −0,44% |
-| E | 1495 | 1493 | −0,13% |
-
-Kontrolę odpala `functions.kontrola(wariant)`.
+**Nowe źródło tego bufora nie zawiera**, więc ta kontrola odpadła. Została
+poniższa, oparta na niezależnym zbiorze adresów.
 
 Druga kontrola dotyczy kompletności samych adresów. Zestawienie PRG
 z OpenStreetMap dla korytarza wariantu A + 200 m:
@@ -400,7 +400,7 @@ na GitHubie i pobiera je `pobierz_dane.py`:
 
 | katalog | zawartość | archiwum |
 |---|---|---|
-| `warianty/` | pliki GML wariantów A–F | `warianty.tar.gz` (8 MB) |
+| `warianty/` | warstwy wariantów A–F z materiałów STEŚ | `warianty-stes.tar.gz` (37 MB) |
 | `wojewodztwa-adresy/` | punkty adresowe PRG dla małopolski | `wojewodztwa-adresy.tar.gz` (44 MB) |
 | `budynki/` | obrysy budynków EGiB przy korytarzu | `budynki.tar.gz` (1 MB) |
 
