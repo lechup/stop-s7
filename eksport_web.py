@@ -191,11 +191,47 @@ def warstwa_dzialek(wariant, korytarz, postep=print):
   if trafione.empty:
     return []
   dane = json.loads(trafione.to_crs(4326).to_json(drop_id=True))
-  for obiekt in dane["features"]:
+  for obiekt, (_, rekord) in zip(dane["features"], trafione.iterrows()):
     obiekt["geometry"]["coordinates"] = zaokraglij(obiekt["geometry"]["coordinates"])
-    obiekt["properties"] = {"warstwa": "dzialki"}
+    obiekt["properties"] = {
+        "warstwa": "dzialki",
+        "teryt": rekord.get("teryt") or "",
+        "obreb": rekord.get("obreb") or "",
+        "nr": rekord.get("nr_dzialki") or "",
+    }
   postep("    {:<18} {:>5} obiektow".format("dzialki", len(dane["features"])))
   return dane["features"]
+
+
+def indeks_dzialek(korytarze, postep=print):
+  """Dzialki przeciete przez korytarz ktoregokolwiek wariantu.
+
+  Dla kazdej podajemy udzial zajecia w KAZDYM wariancie, ktory ja tyka — to
+  odpowiedz na pytanie wlasciciela "ktory wariant zabiera mi ile"."""
+  import geopandas as gpd
+  zebrane = {}
+  for wariant, korytarz in korytarze.items():
+    gdf = gpd.read_file("warianty/wariant-{}.gpkg".format(wariant), layer="dzialki")
+    gdf = gdf.to_crs(consts.CRS_METRYCZNY)
+    gdf["geometry"] = shapely.make_valid(gdf.geometry.values)
+    trafione = gdf.iloc[sorted(set(
+        gdf.sindex.query(korytarz, predicate="intersects")))]
+    srodki = trafione.geometry.representative_point()
+    srodki_wgs = gpd.GeoSeries(srodki, crs=consts.CRS_METRYCZNY).to_crs(4326)
+    for (_, rekord), punkt in zip(trafione.iterrows(), srodki_wgs):
+      pole = float(rekord.get("pow_m2") or 0)
+      zajete = shapely.area(shapely.intersection(rekord.geometry, korytarz))
+      wpis = zebrane.setdefault(rekord.get("teryt") or "", [
+          tekst(rekord.get("obreb")),
+          tekst(rekord.get("nr_dzialki")),
+          tekst(rekord.get("gmina")),
+          round(pole),
+          round(punkt.x, MIEJSC), round(punkt.y, MIEJSC),
+          {},
+      ])
+      wpis[6][wariant] = round(100 * zajete / pole) if pole else 0
+    postep("    {}: {} działek".format(wariant, len(trafione)))
+  return zebrane
 
 
 def warstwy_wariantu(wariant):
@@ -299,6 +335,15 @@ if __name__ == "__main__":
           {"type": "FeatureCollection", "features": dzialki})
     razem += rozmiar
     print("  wariant {}: {:.0f} kB".format(wariant, rozmiar / 1024))
+
+  print("\nIndeks działek:")
+  wpisy = indeks_dzialek(korytarze)
+  rozmiar = zapisz_json("{}/dzialki-index.json".format(KATALOG), {
+      "warianty": consts.VARIANTS,
+      "dzialki": [[teryt] + dane for teryt, dane in sorted(wpisy.items())],
+  })
+  razem += rozmiar
+  print("  {} działek, {:.0f} kB".format(len(wpisy), rozmiar / 1024))
 
   rozmiar = zapisz_miary()
   if rozmiar:

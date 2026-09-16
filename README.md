@@ -327,6 +327,17 @@ jednocześnie na mapę i na statystyki: można obejrzeć same domy mieszkalne,
 albo mieszkalne razem z oświatą i opieką zdrowotną. Wybór przeżywa zmianę
 wariantu.
 
+Obok wyszukiwarki adresów działa **wyszukiwarka działek** — po identyfikatorze
+TERYT (`120903_4.0002.107`), po obrębie z numerem (`Myślenice 2 107`) albo po
+samym numerze. Wynik pokazuje, jaki procent działki zabiera **każdy** wariant,
+z jawnym „nie dotyka" tam, gdzie wariant jej nie tyka.
+
+To odpowiedź na inne pytanie niż wyszukiwarka adresów: wywłaszczenie części
+działki dotyka właściciela także wtedy, gdy nic na niej nie stoi. Indeks obejmuje
+5680 działek przeciętych przez korytarz któregokolwiek wariantu — z czego
+**4209 dotyka tylko jeden wariant**, więc wybór przebiegu realnie przesądza
+o losie konkretnych ludzi.
+
 Strona ma motyw jasny i ciemny. Domyślnie idzie **za ustawieniem systemu**
 i reaguje na jego zmianę w locie; przycisk w nagłówku pozwala wybrać jawnie,
 a wybór zapamiętuje `localStorage`. Kafelki OpenStreetMap są jasne, więc
@@ -376,6 +387,8 @@ Dane generuje [eksport_web.py](eksport_web.py):
 |---|---|---|
 | `docs/dane/wariant-X.geojson` | korytarz, budynki i adresy jednego wariantu | 40–58 kB |
 | `docs/dane/wariant-X-dzialki.geojson` | działki przecinające korytarz, wczytywane leniwie | 200–260 kB |
+| `docs/dane/dzialki-index.json` | 5680 działek z udziałem zajęcia w każdym wariancie | ~120 kB |
+| `docs/dane/miary.json` | miary terenowe do panelu, czytane z `podsumowanie.csv` | 2 kB |
 | `docs/dane/adresy-index.json` | 13 924 adresy z odległością do każdego wariantu | 362 kB |
 
 Całość waży 662 kB po kompresji, więc nie ma po co sięgać po kafelki wektorowe —

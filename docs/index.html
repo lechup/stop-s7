@@ -68,7 +68,7 @@
                                           border-color: var(--akcent); }
   label.przelacznik { display: flex; align-items: center; gap: 8px; padding: 3px 0;
                       font-size: 14px; cursor: pointer; }
-  #szukaj { width: 100%; padding: 9px 10px; font-size: 14px; border: 1px solid var(--ramka);
+  #szukaj, #szukaj-dzialki { width: 100%; padding: 9px 10px; font-size: 14px; border: 1px solid var(--ramka);
             border-radius: 6px; }
   details.rodzaje { margin: 2px 0 4px 26px; font-size: 13px; }
   details.rodzaje summary { cursor: pointer; color: var(--akcent); padding: 2px 0;
@@ -85,7 +85,7 @@
                           padding: 2px 0; cursor: pointer; }
   details.rodzaje label input { flex: none; }
   details.rodzaje .skroty { padding-top: 4px; }
-  #wyniki { margin-top: 8px; }
+  #wyniki, #wyniki-dzialki { margin-top: 8px; }
   .trafienie { padding: 7px 8px; border: 1px solid var(--ramka); border-radius: 6px;
                margin-bottom: 6px; cursor: pointer; background: var(--pole); font-size: 14px; }
   .trafienie:hover { border-color: var(--akcent); }
@@ -159,6 +159,13 @@
       <input id="szukaj" type="search" placeholder="np. Osterwy 41P albo Golkowice 116"
              autocomplete="off" aria-label="Szukaj adresu">
       <div id="wyniki"></div>
+    </div>
+
+    <div class="sekcja">
+      <h2>Sprawdź działkę</h2>
+      <input id="szukaj-dzialki" type="search" placeholder="np. P-93 305 albo Włosań 117"
+             autocomplete="off" aria-label="Szukaj działki">
+      <div id="wyniki-dzialki"></div>
     </div>
 
     <div class="sekcja">
@@ -900,6 +907,93 @@ function wybierzAdres(wiersz, element, przesunMape) {
   if (przesunMape) mapa.setView([wiersz[5], wiersz[4]], 17);
   adresWybrany = wiersz;
   zapiszStanUrl();
+}
+
+let indeksDzialek = null;
+let indeksDzialekWczytywany = null;
+
+async function wczytajIndeksDzialek() {
+  if (indeksDzialek) return indeksDzialek;
+  if (!indeksDzialekWczytywany) {
+    indeksDzialekWczytywany = fetch("dane/dzialki-index.json")
+      .then(r => r.json()).then(d => { indeksDzialek = d; return d; });
+  }
+  return indeksDzialekWczytywany;
+}
+
+function tabelaDlaDzialki(wiersz) {
+  const udzialy = wiersz[7];
+  let html = '<table class="strefy"><tr><th>wariant</th><th class="odl">zajęte</th></tr>';
+  for (const wariant of indeksDzialek.warianty) {
+    const udzial = udzialy[wariant];
+    const opis = udzial === undefined ? "nie dotyka"
+      : (udzial === 0 ? "<1%" : udzial + "%");
+    html += "<tr><td>" + wariant + '</td><td class="odl">' +
+      (udzial === undefined ? '<span class="uwaga">' + opis + "</span>" :
+       "<strong>" + opis + "</strong>") + "</td></tr>";
+  }
+  return html + "</table>";
+}
+
+function elementDzialki(wiersz) {
+  const element = document.createElement("div");
+  element.className = "trafienie";
+  element.innerHTML = "<strong>dz. " + wiersz[2] + ", obręb " + wiersz[1] +
+    "</strong><br><span class=\"info\">" + wiersz[3] + " · " +
+    wiersz[4].toLocaleString("pl-PL") + " m²</span>";
+  element.addEventListener("click", () => {
+    zdarzenie("sprawdzenie-dzialki", "Sprawdzenie działki");
+    document.querySelectorAll("#wyniki-dzialki .strefy").forEach(t => t.remove());
+    element.insertAdjacentHTML("beforeend", tabelaDlaDzialki(wiersz));
+    znacznikSzukania.clearLayers();
+    L.circleMarker([wiersz[6], wiersz[5]], { radius: 9, color: "#1a5fb4", weight: 3,
+      fillColor: "#1a5fb4", fillOpacity: 0.25 }).addTo(znacznikSzukania);
+    mapa.setView([wiersz[6], wiersz[5]], 17);
+  });
+  return element;
+}
+
+let czasomierzDzialek = null;
+document.getElementById("szukaj-dzialki").addEventListener("input", (zdarz) => {
+  clearTimeout(czasomierzDzialek);
+  czasomierzDzialek = setTimeout(() => szukajDzialki(zdarz.target.value.trim()), 180);
+});
+
+async function szukajDzialki(zapytanie) {
+  const pojemnik = document.getElementById("wyniki-dzialki");
+  if (zapytanie.length < 2) { pojemnik.innerHTML = ""; return; }
+  pojemnik.innerHTML = '<p class="info">Szukam…</p>';
+  await wczytajIndeksDzialek();
+
+  // Trzy formy zapytania: pelny lub czesciowy TERYT, "obreb numer",
+  // albo sam numer dzialki.
+  const male = zapytanie.toLowerCase();
+  const czesci = male.split(/\s+/);
+  const numer = czesci.length > 1 ? czesci[czesci.length - 1] : null;
+  const obreb = czesci.length > 1 ? czesci.slice(0, -1).join(" ") : null;
+
+  const trafienia = indeksDzialek.dzialki.filter(w => {
+    if (male.includes("_") || male.includes(".")) {
+      return w[0].toLowerCase().includes(male);
+    }
+    if (obreb) {
+      return String(w[2]).toLowerCase() === numer &&
+             String(w[1]).toLowerCase().includes(obreb);
+    }
+    return String(w[2]).toLowerCase() === male;
+  }).slice(0, 40);
+
+  zdarzenieZbiorcze(trafienia.length ? "wyszukiwanie-dzialki" : "wyszukiwanie-dzialki-bez-wyniku",
+                    "Wyszukiwanie działki");
+
+  if (!trafienia.length) {
+    pojemnik.innerHTML = '<p class="info">Nic nie pasuje. Indeks obejmuje tylko ' +
+      'działki przecięte przez korytarz któregoś wariantu — jeśli Twojej tu nie ma, ' +
+      'żaden wariant jej nie tyka.</p>';
+    return;
+  }
+  pojemnik.innerHTML = "";
+  trafienia.forEach(w => pojemnik.appendChild(elementDzialki(w)));
 }
 
 let czasomierz = null;
