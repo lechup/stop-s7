@@ -190,37 +190,71 @@ def warstwa_dzialek(wariant, korytarz, postep=print):
   trafione = gdf.iloc[sorted(set(gdf.sindex.query(korytarz, predicate="intersects")))]
   if trafione.empty:
     return []
+  # Zabudowana czy nie — z obrysow EGiB. Rozroznienie jest istotne: wywlaszczenie
+  # dzialki z domem to co innego niz pola, choc jedno i drugie boli wlasciciela.
+  budynki = functions.wczytaj_budynki()
+  z_budynkiem = set()
+  if budynki is not None and len(budynki):
+    trafienia = budynki.sindex.query(trafione.geometry.values, predicate="intersects")
+    z_budynkiem = set(trafienia[0].tolist())
+
   dane = json.loads(trafione.to_crs(4326).to_json(drop_id=True))
-  for obiekt, (_, rekord) in zip(dane["features"], trafione.iterrows()):
+  for i, (obiekt, (_, rekord)) in enumerate(zip(dane["features"], trafione.iterrows())):
     obiekt["geometry"]["coordinates"] = zaokraglij(obiekt["geometry"]["coordinates"])
     obiekt["properties"] = {
         "warstwa": "dzialki",
         "teryt": rekord.get("teryt") or "",
         "obreb": rekord.get("obreb") or "",
         "nr": rekord.get("nr_dzialki") or "",
+        "zab": 1 if i in z_budynkiem else 0,
     }
   postep("    {:<18} {:>5} obiektow".format("dzialki", len(dane["features"])))
   return dane["features"]
 
 
 def indeks_dzialek(korytarze, postep=print):
-  """Dzialki przeciete przez korytarz ktoregokolwiek wariantu.
+  """Dzialki w promieniu PROMIEN_INDEKSU od ktoregokolwiek korytarza.
 
-  Dla kazdej podajemy udzial zajecia w KAZDYM wariancie, ktory ja tyka — to
-  odpowiedz na pytanie wlasciciela "ktory wariant zabiera mi ile"."""
+  Zasieg jest szerszy niz samo przeciecie z rozmyslu: dzialka bez zabudowy nie
+  ma adresu, wiec jej wlasciciel nie znajdzie sie w wyszukiwarce adresow i bez
+  tego nie mialby zadnego sposobu, zeby cokolwiek sprawdzic.
+
+  Wartosc na wariant kodujemy jedna liczba, zeby indeks nie spuchl:
+    dodatnia  — procent dzialki zajety przez korytarz,
+    zero      — korytarz ja tyka, ale ponizej 1%,
+    ujemna    — odleglosc od korytarza w metrach.
+  """
   import geopandas as gpd
   zebrane = {}
   for wariant, korytarz in korytarze.items():
     gdf = gpd.read_file("warianty/wariant-{}.gpkg".format(wariant), layer="dzialki")
     gdf = gdf.to_crs(consts.CRS_METRYCZNY)
     gdf["geometry"] = shapely.make_valid(gdf.geometry.values)
-    trafione = gdf.iloc[sorted(set(
-        gdf.sindex.query(korytarz, predicate="intersects")))]
-    srodki = trafione.geometry.representative_point()
-    srodki_wgs = gpd.GeoSeries(srodki, crs=consts.CRS_METRYCZNY).to_crs(4326)
-    for (_, rekord), punkt in zip(trafione.iterrows(), srodki_wgs):
+
+    obszar = shapely.buffer(korytarz, PROMIEN_INDEKSU)
+    bliskie = gdf.iloc[sorted(set(
+        gdf.sindex.query(obszar, predicate="intersects")))].copy()
+    if bliskie.empty:
+      continue
+
+    # Odleglosc liczymy do czesci korytarza, nie do calosci — drzewo STR odsiewa
+    # wtedy dalekie czesci zamiast porownywac kazda dzialke z cala geometria.
+    czesci = gpd.GeoDataFrame(
+        geometry=list(shapely.get_parts(korytarz)), crs=consts.CRS_METRYCZNY)
+    pary = gpd.sjoin_nearest(bliskie, czesci, distance_col="_odl", how="inner")
+    pary = pary.sort_values("_odl").groupby(level=0).first()
+    bliskie["_odl"] = pary["_odl"].reindex(bliskie.index)
+
+    srodki = gpd.GeoSeries(bliskie.geometry.representative_point(),
+                           crs=consts.CRS_METRYCZNY).to_crs(4326)
+    for (_, rekord), punkt in zip(bliskie.iterrows(), srodki):
       pole = float(rekord.get("pow_m2") or 0)
-      zajete = shapely.area(shapely.intersection(rekord.geometry, korytarz))
+      odleglosc = float(rekord["_odl"] or 0)
+      if odleglosc > 0:
+        wartosc = -round(odleglosc)
+      else:
+        zajete = shapely.area(shapely.intersection(rekord.geometry, korytarz))
+        wartosc = round(100 * zajete / pole) if pole else 0
       wpis = zebrane.setdefault(rekord.get("teryt") or "", [
           tekst(rekord.get("obreb")),
           tekst(rekord.get("nr_dzialki")),
@@ -229,8 +263,8 @@ def indeks_dzialek(korytarze, postep=print):
           round(punkt.x, MIEJSC), round(punkt.y, MIEJSC),
           {},
       ])
-      wpis[6][wariant] = round(100 * zajete / pole) if pole else 0
-    postep("    {}: {} działek".format(wariant, len(trafione)))
+      wpis[6][wariant] = wartosc
+    postep("    {}: {} działek".format(wariant, len(bliskie)))
   return zebrane
 
 
@@ -340,6 +374,7 @@ if __name__ == "__main__":
   wpisy = indeks_dzialek(korytarze)
   rozmiar = zapisz_json("{}/dzialki-index.json".format(KATALOG), {
       "warianty": consts.VARIANTS,
+      "promien": PROMIEN_INDEKSU,
       "dzialki": [[teryt] + dane for teryt, dane in sorted(wpisy.items())],
   })
   razem += rozmiar

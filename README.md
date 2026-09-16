@@ -327,16 +327,29 @@ jednocześnie na mapę i na statystyki: można obejrzeć same domy mieszkalne,
 albo mieszkalne razem z oświatą i opieką zdrowotną. Wybór przeżywa zmianę
 wariantu.
 
+Warstwa działek na mapie dzieli się na **zabudowane i niezabudowane** — osobny
+filtr, jak przy rodzajach budynków. Rozróżnienie jest istotne, a proporcja
+zaskakuje: spośród działek przecinanych przez korytarz zabudowanych jest tylko
+około **20%** (np. w wariancie A 300 z 1534). Reszta to pola, łąki i nieużytki,
+których właściciele nie pojawią się w żadnej statystyce budynków ani adresów.
+
 Obok wyszukiwarki adresów działa **wyszukiwarka działek** — po identyfikatorze
 TERYT (`120903_4.0002.107`), po obrębie z numerem (`Myślenice 2 107`) albo po
-samym numerze. Wynik pokazuje, jaki procent działki zabiera **każdy** wariant,
-z jawnym „nie dotyka" tam, gdzie wariant jej nie tyka.
+samym numerze. Wynik pokazuje dla **każdego** wariantu albo procent zajęcia
+działki, albo odległość od korytarza — a gdy działka leży dalej niż promień
+indeksu, mówi to wprost.
 
 To odpowiedź na inne pytanie niż wyszukiwarka adresów: wywłaszczenie części
-działki dotyka właściciela także wtedy, gdy nic na niej nie stoi. Indeks obejmuje
-5680 działek przeciętych przez korytarz któregokolwiek wariantu — z czego
-**4209 dotyka tylko jeden wariant**, więc wybór przebiegu realnie przesądza
-o losie konkretnych ludzi.
+działki dotyka właściciela także wtedy, gdy nic na niej nie stoi. Indeks obejmuje **31 565 działek** w promieniu 500 m od któregokolwiek
+wariantu — tak samo jak indeks adresów. Zasięg szerszy niż samo przecięcie jest
+tu z rozmysłu: działka bez zabudowy nie ma adresu, więc jej właściciel nie
+znajdzie się w wyszukiwarce adresów i bez tego nie miałby żadnego sposobu, żeby
+cokolwiek sprawdzić.
+
+Spośród 5680 działek faktycznie przecinanych przez korytarz **4209 dotyka tylko
+jeden wariant**, a zaledwie 11 wszystkie sześć. Wybór przebiegu nie przesuwa
+więc tego samego ciężaru z miejsca na miejsce — przesądza o losie konkretnych,
+w większości różnych ludzi.
 
 Strona ma motyw jasny i ciemny. Domyślnie idzie **za ustawieniem systemu**
 i reaguje na jego zmianę w locie; przycisk w nagłówku pozwala wybrać jawnie,
@@ -387,7 +400,7 @@ Dane generuje [eksport_web.py](eksport_web.py):
 |---|---|---|
 | `docs/dane/wariant-X.geojson` | korytarz, budynki i adresy jednego wariantu | 40–58 kB |
 | `docs/dane/wariant-X-dzialki.geojson` | działki przecinające korytarz, wczytywane leniwie | 200–260 kB |
-| `docs/dane/dzialki-index.json` | 5680 działek z udziałem zajęcia w każdym wariancie | ~120 kB |
+| `docs/dane/dzialki-index.json` | 31 565 działek: procent zajęcia albo odległość | 583 kB |
 | `docs/dane/miary.json` | miary terenowe do panelu, czytane z `podsumowanie.csv` | 2 kB |
 | `docs/dane/adresy-index.json` | 13 924 adresy z odległością do każdego wariantu | 362 kB |
 
