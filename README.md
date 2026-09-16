@@ -251,15 +251,9 @@ ale wymaga wcześniejszego przeliczenia (`./uruchom.sh`).
 
 ## Wiarygodność
 
-Do wydania z listopada 2025 raport miał kontrolę krzyżową względem gotowego
-bufora 200 m, policzonego przez autorów materiałów — pliki GML go zawierały.
-Wychodziła na niej różnica −0,11% do −0,44%, czyli zgodność bardzo dobra.
-
-**Nowe źródło tego bufora nie zawiera**, więc ta kontrola odpadła. Została
-poniższa, oparta na niezależnym zbiorze adresów.
-
-Druga kontrola dotyczy kompletności samych adresów. Zestawienie PRG
-z OpenStreetMap dla korytarza wariantu A + 200 m:
+Kontrola dotyczy kompletności danych adresowych: czy PRG nie gubi adresów,
+których istnienie potwierdza niezależne źródło. Zestawienie z OpenStreetMap
+dla korytarza wariantu A + 200 m:
 
 | | liczba |
 |---|---|

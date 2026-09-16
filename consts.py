@@ -23,10 +23,6 @@ OSIE = ["os", "os_bdi"]
 # Osie odcinkow tunelowych.
 OSIE_TUNELI = ["os_tunel", "os_tunel_bdi"]
 
-# Gotowe bufory 200 m wokol osi z materialow zrodlowych sluzyly za kontrole
-# krzyzowa przy plikach GML. Nowe zrodlo ich nie zawiera — kontrola opiera sie
-# teraz na porownaniu z OpenStreetMap (patrz README).
-
 # Progi stref odlegloci od sladu drogi [m].
 STREFY = [20, 30, 50, 200]
 
