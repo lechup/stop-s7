@@ -506,7 +506,11 @@ Nie da się tego zrobić prościej, bo GUGiK nie publikuje już paczek
 wojewódzkich w SHP pod stałym adresem. Nazwy plików wewnątrz paczki zbiorczej
 zawierają znacznik czasu generowania (`12_malopolskie_11.09.2026_11.35.23.gml`),
 więc nie można ich adresować bezpośrednio — trzeba pobrać całą paczkę
-ogólnopolską (ok. 755 MB) i wyciąć z niej województwo. Serwer nie obsługuje
+ogólnopolską i wyciąć z niej województwo:
+
+<https://opendata.geoportal.gov.pl/prg/adresy/PRG-punkty_adresowe.zip>
+
+To ok. 755 MB. Serwer nie obsługuje
 żądań zakresowych, więc skrótu tu nie ma.
 
 Paczka jest w **GML**, a nie SHP, i różni się układem: w SHP nazwa miejscowości
@@ -538,8 +542,31 @@ w sekcji [Obrysy budynków (EGiB)](#obrysy-budynków-egib) wyżej:
 
 <https://mapy.geoportal.gov.pl/wss/service/PZGIK/EGIB/WFS/UslugaZbiorcza>
 
-Pliki GML z wariantami przebiegu trasy pochodzą z materiałów
-z konsultacji społecznych dotyczących przebiegu S7.
+Przebiegi wariantów pochodzą z **materiałów konsultacyjnych STEŚ** (studium
+techniczno-ekonomiczno-środowiskowe), wystawionych jako mapy przeglądowe —
+po jednym serwisie na wariant:
+
+| wariant | adres |
+|---|---|
+| A (W21/W18/W36) | <https://wariant-wa.s7-krakow-myslenice-stes.pl/> |
+| B (W26/W21/W36) | <https://wariant-wb.s7-krakow-myslenice-stes.pl/> |
+| C (W35/W16/W10) | <https://wariant-wc.s7-krakow-myslenice-stes.pl/> |
+| D | <https://wariant-wd.s7-krakow-myslenice-stes.pl/> |
+| E | <https://wariant-we.s7-krakow-myslenice-stes.pl/> |
+| F | <https://wariant-wf.s7-krakow-myslenice-stes.pl/> |
+
+Wydanie z **3 listopada 2025**, potwierdzone nagłówkiem `Last-Modified` serwisu.
+Strony to eksporty qgis2web, w których każda warstwa jest plikiem JS z GeoJSON-em;
+pobiera je [pobierz_warianty.py](pobierz_warianty.py). Stamtąd pochodzą nie tylko
+osie i skarpy, ale też działki ewidencyjne, osuwiska, tereny zalewowe i obszary
+chronione. Pełny inwentarz: [warstwy.md](warstwy.md).
+
+**OpenStreetMap** służy do dwóch rzeczy: jest podkładem mapowym strony
+([licencja ODbL](https://www.openstreetmap.org/copyright)) i niezależnym zbiorem odniesienia przy kontroli kompletności adresów, którą
+odpytujemy przez [Overpass API](https://overpass-api.de/).
+
+Mapa korzysta z biblioteki [Leaflet](https://leafletjs.com/) (BSD-2-Clause),
+wczytywanej z CDN — nie jest kopiowana do repozytorium.
 
 ### Wgranie nowej wersji danych
 
