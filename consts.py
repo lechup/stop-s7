@@ -50,3 +50,52 @@ TOLERANCJA = 0.5
 
 # Uklad metryczny, w ktorym liczymy odleglosci i pola (PL-1992).
 CRS_METRYCZNY = 2180
+
+
+NAZWY_RODZAJOW = [
+    ("OsuwiskaAktywneCiagle", "osuwisko aktywne ciągle"),
+    ("OsuwiskaAktywneOkresowo", "osuwisko aktywne okresowo"),
+    ("OsuwiskaNieaktywne", "osuwisko nieaktywne"),
+    ("ObszaryZagrozone", "obszar zagrożony ruchami masowymi"),
+    ("ParkiNarodoweOtulina", "otulina parku narodowego"),
+    ("Park Narodowy", "park narodowy"),
+    ("ParkiKrajobrazowe", "park krajobrazowy"),
+    ("ObszaryChronionegoKrajobrazu", "obszar chronionego krajobrazu"),
+    ("ObszarySpecjalnejOchrony", "Natura 2000 — obszar ptasi"),
+    ("SpecjalneObszaryOchrony", "Natura 2000 — obszar siedliskowy"),
+    ("ZespolyPrzyrodniczoKrajobrazowe", "zespół przyrodniczo-krajobrazowy"),
+    ("StanowiskaDokumentacyjne", "stanowisko dokumentacyjne"),
+    ("UzytkiEkologiczne", "użytek ekologiczny"),
+    ("Rezerwaty", "rezerwat przyrody"),
+]
+
+
+def napraw_kodowanie(tekst):
+  """Odzyskuje polskie znaki z napisu zapisanego UTF-8, a odczytanego Latin-1.
+
+  Zrodlo ma tak popsuta czesc nazw warstw ("OsuwiskaAktywneCiÄ…gle" zamiast
+  "...Ciagle"). Odwracamy przez CP1252, a nie Latin-1: w zepsutym napisie siedzi
+  U+2026 ("..."), ktorego w Latin-1 nie ma, wiec odwrocenie tamtym by sie
+  wysypalo. Gdy sie nie uda, zwracamy napis bez zmian."""
+  for kodowanie in ("cp1252", "latin-1"):
+    try:
+      return tekst.encode(kodowanie).decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+      continue
+  return tekst
+
+
+def bez_ogonkow(tekst):
+  ogonki = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
+  return "".join(c for c in tekst.translate(ogonki) if c.isalnum()).lower()
+
+
+def nazwa_rodzaju(wartosc, domyslna):
+  """Czytelna nazwa z atrybutu Layer (np. 'G-Plan-OsuwiskaNieaktywneHatch')."""
+  if not wartosc:
+    return domyslna
+  uproszczone = bez_ogonkow(napraw_kodowanie(str(wartosc)))
+  for wzorzec, nazwa in NAZWY_RODZAJOW:
+    if bez_ogonkow(wzorzec) in uproszczone:
+      return nazwa
+  return domyslna

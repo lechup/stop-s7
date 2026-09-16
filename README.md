@@ -211,9 +211,20 @@ nad tunelem:
 | `działki` | ile działek ewidencyjnych przecina korytarz |
 | `zajęte [ha]` | powierzchnia tych działek przypadająca na korytarz |
 | `osuwiska [ha]` | ile korytarza przechodzi przez obszary osuwiskowe |
+| `osuwisko aktywne ciągle [ha]` | z tego osuwiska czynne bez przerwy |
+| `osuwisko aktywne okresowo [ha]` | czynne okresowo |
+| `osuwisko nieaktywne [ha]` | nieczynne |
 | `ruchy masowe [ha]` | obszary zagrożone ruchami masowymi ziemi |
 | `tereny zalewowe [ha]` | tereny zagrożone powodzią |
-| `obszary chronione [ha]` | obszary chronione przyrodniczo |
+| `obszary chronione [ha]` | obszary chronione przyrodniczo, łącznie |
+| `park narodowy [ha]` i dalsze | rozbicie na dziesięć kategorii ochrony |
+
+Osuwiska rozbite są na **czynne i nieczynne**, bo różnica jest kluczowa dla
+kosztu i ryzyka budowy — osuwisko aktywne pod planowaną drogą to zupełnie inny
+problem inżynieryjny niż ustabilizowane. Obszary chronione rozbite są na
+dziesięć kategorii ochrony. Zera też zapisujemy: informacja, że **żaden wariant
+nie tyka parku narodowego, rezerwatu ani obszaru Natura 2000**, jest sama
+w sobie wynikiem i lepiej, żeby wynikała z tabeli niż z niczyjego zapewnienia.
 
 Liczba działek jest istotna niezależnie od zabudowy: wywłaszczenie części
 działki dotyka właściciela także wtedy, gdy nie stoi na niej dom. Osuwiska

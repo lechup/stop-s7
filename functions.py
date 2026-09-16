@@ -342,6 +342,34 @@ PLIK_KONTEKSTU = "warianty/kontekst.gpkg"
 _kontekst = {}
 
 
+# Warstwy, dla ktorych podajemy rozbicie na rodzaje. Przy osuwiskach roznica
+# miedzy czynnym a nieczynnym jest kluczowa dla kosztu i ryzyka budowy, przy
+# obszarach chronionych — dla tego, czy droga w ogole moze tamtedy przejsc.
+WARSTWY_Z_RODZAJAMI = {"osuwiska": "osuwiska", "chronione": "obszary chronione"}
+
+_rodzaje = {}
+
+
+def rodzaje_kontekstu(warstwa):
+  """Obszary warstwy pogrupowane po rodzaju: {nazwa rodzaju: geometria}.
+
+  Rodzaj siedzi w atrybucie Layer materialow zrodlowych."""
+  if warstwa not in _rodzaje:
+    wynik = {}
+    try:
+      gdf = gpd.read_file(PLIK_KONTEKSTU, layer=warstwa).to_crs(consts.CRS_METRYCZNY)
+      gdf["geometry"] = shapely.make_valid(gdf.geometry.values)
+      domyslna = WARSTWY_Z_RODZAJAMI.get(warstwa, warstwa)
+      gdf["_rodzaj"] = [consts.nazwa_rodzaju(v, domyslna)
+                        for v in gdf.get("Layer", [None] * len(gdf))]
+      for rodzaj, grupa in gdf.groupby("_rodzaj"):
+        wynik[rodzaj] = shapely.union_all(grupa.geometry.values)
+    except Exception:
+      pass
+    _rodzaje[warstwa] = wynik
+  return _rodzaje[warstwa]
+
+
 def wczytaj_kontekst(warstwa):
   """Warstwa terenowa wspolna dla wszystkich wariantow (None, gdy jej nie ma).
 
@@ -381,6 +409,13 @@ def miary_terenu(wariant, korytarz):
       continue
     wynik[kolumna] = round(
         shapely.area(shapely.intersection(korytarz, obszar)) / 10000, 1)
+
+    # Rozbicie na rodzaje. Zera tez zapisujemy — informacja, ze zaden wariant
+    # nie tyka parku narodowego ani Natury 2000, jest sama w sobie wynikiem.
+    if warstwa in WARSTWY_Z_RODZAJAMI:
+      for rodzaj, geometria_rodzaju in sorted(rodzaje_kontekstu(warstwa).items()):
+        wynik["{} [ha]".format(rodzaj)] = round(
+            shapely.area(shapely.intersection(korytarz, geometria_rodzaju)) / 10000, 1)
   return wynik
 
 
