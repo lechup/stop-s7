@@ -88,6 +88,7 @@ SZCZEGOLOWO_DO = 5
 
 W_SLADZIE = "w śladzie"
 NAD_TUNELEM = "nad tunelem"
+W_LACZNICACH = "w łącznicach"
 DO_ROZBIORKI = "do rozbiórki"
 BUDYNKI = "budynki"
 BUDYNKI_MIESZKALNE = "budynki mieszkalne"
@@ -147,9 +148,11 @@ def trafione_budynki(warstwy):
   if budynki is None:
     return None
 
-  korytarz = warstwy["korytarz"]
+  zasieg = warstwy.get("zasieg")
+  if zasieg is None:
+    zasieg = warstwy["korytarz"]
   czesci = gpd.GeoDataFrame(
-      geometry=list(shapely.get_parts(korytarz)), crs=consts.CRS_METRYCZNY)
+      geometry=list(shapely.get_parts(zasieg)), crs=consts.CRS_METRYCZNY)
   pary = gpd.sjoin_nearest(
       budynki, czesci, max_distance=float(max(consts.STREFY)),
       distance_col="odleglosc_m", how="inner")
@@ -167,6 +170,10 @@ def trafione_budynki(warstwy):
   if warstwy.get("tunel") is not None:
     nad_tunelem = set(budynki.sindex.query(
         warstwy["tunel"], predicate="intersects")) - w_sladzie
+  w_lacznicach = set()
+  if warstwy.get("lacznice") is not None:
+    w_lacznicach = set(budynki.sindex.query(
+        warstwy["lacznice"], predicate="intersects")) - w_sladzie - nad_tunelem
 
   pozycje = {idx: i for i, idx in enumerate(budynki.index)}
   strefy = []
@@ -176,8 +183,10 @@ def trafione_budynki(warstwy):
       strefy.append(W_SLADZIE)
     elif pozycja in nad_tunelem:
       strefy.append(NAD_TUNELEM)
+    elif pozycja in w_lacznicach:
+      strefy.append(W_LACZNICACH)
     else:
-      strefy.append(_strefa(odleglosc) or nazwy_stref()[2])
+      strefy.append(_strefa(odleglosc) or _pierwsza_strefa())
   trafione["strefa"] = strefy
   return trafione.reset_index(drop=True)
 
@@ -225,12 +234,16 @@ def najnowsza_data(sciezka):
 
 def nazwy_stref():
   """Nazwy stref rozlacznych, od sladu na zewnatrz."""
-  nazwy = [W_SLADZIE, NAD_TUNELEM]
+  nazwy = [W_SLADZIE, NAD_TUNELEM, W_LACZNICACH]
   poprzedni = 0
   for prog in consts.STREFY:
     nazwy.append("{}-{} m".format(poprzedni, prog))
     poprzedni = prog
   return nazwy
+
+
+def _pierwsza_strefa():
+  return "0-{} m".format(consts.STREFY[0])
 
 
 def _strefa(odleglosc):
@@ -265,11 +278,19 @@ def policz(wariant, postep=None):
     powierzchnia = shapely.difference(slad_pelny, pas)
     korytarz = shapely.union_all([slad_pelny, pas])
 
+  pas_lacznic = geometria.lacznice(wariant, nazwy)
   warstwy = {"powierzchnia": powierzchnia, "tunel": pas,
-             "korytarz": korytarz,
-             "lacznice": geometria.lacznice(wariant, nazwy)}
+             "korytarz": korytarz, "lacznice": pas_lacznic}
 
-  adresy = wczytaj_adresy(korytarz)
+  # Strefy liczymy do trasy RAZEM z lacznicami wezlow: dom 15 m od slimaka
+  # jest dotkniety tak samo jak 15 m od trasy glownej. Przyjeta szerokosc
+  # lacznicy przesuwa tu wynik o metry, a nie o cala miare — inaczej niz
+  # w kolumnie "w sladzie", gdzie te 8 m bylo by calym pomiarem.
+  zasieg = korytarz if pas_lacznic is None else shapely.union_all(
+      [korytarz, pas_lacznic])
+  warstwy["zasieg"] = zasieg
+
+  adresy = wczytaj_adresy(zasieg)
   if adresy.empty:
     return adresy.assign(odleglosc_m=[], strefa=[]), warstwy
 
@@ -277,7 +298,7 @@ def policz(wariant, postep=None):
   # drzewo STR odsiewa wtedy dalekie czesci zamiast porownywac kazdy punkt
   # z cala, skomplikowana geometria.
   czesci = gpd.GeoDataFrame(
-      geometry=list(shapely.get_parts(korytarz)), crs=consts.CRS_METRYCZNY)
+      geometry=list(shapely.get_parts(zasieg)), crs=consts.CRS_METRYCZNY)
 
   pary = gpd.sjoin_nearest(
       adresy, czesci, max_distance=float(max(consts.STREFY)),
@@ -294,6 +315,10 @@ def policz(wariant, postep=None):
   nad_tunelem = set()
   if pas is not None:
     nad_tunelem = set(adresy.sindex.query(pas, predicate="contains")) - w_sladzie
+  w_lacznicach = set()
+  if pas_lacznic is not None:
+    w_lacznicach = set(adresy.sindex.query(
+        pas_lacznic, predicate="contains")) - w_sladzie - nad_tunelem
 
   pozycje = {idx: i for i, idx in enumerate(adresy.index)}
   strefy = []
@@ -303,9 +328,11 @@ def policz(wariant, postep=None):
       strefy.append(W_SLADZIE)
     elif poz in nad_tunelem:
       strefy.append(NAD_TUNELEM)
+    elif poz in w_lacznicach:
+      strefy.append(W_LACZNICACH)
     else:
       # Punkt tuz przy krawedzi moze miec odleglosc 0 i nie byc "wewnatrz".
-      strefy.append(_strefa(odl) or nazwy_stref()[2])
+      strefy.append(_strefa(odl) or _pierwsza_strefa())
   wynik["strefa"] = strefy
   return wynik, warstwy
 
@@ -319,7 +346,8 @@ def _dopisz_strefy(wiersz, przedrostek, strefy):
     wiersz["{} {}".format(przedrostek, nazwa)] = int(liczby.get(nazwa, 0))
 
   wiersz[przedrostek] = (wiersz["{} {}".format(przedrostek, W_SLADZIE)]
-                         + wiersz["{} {}".format(przedrostek, NAD_TUNELEM)])
+                         + wiersz["{} {}".format(przedrostek, NAD_TUNELEM)]
+                         + wiersz["{} {}".format(przedrostek, W_LACZNICACH)])
 
   narastajaco = wiersz[przedrostek]
   poprzedni = 0
@@ -438,16 +466,9 @@ def miary_lacznic(wariant, korytarz, pas):
   if shapely.is_empty(nowe):
     return wynik
 
-  adresy = wczytaj_adresy(nowe)
-  if len(adresy):
-    wynik["adresy w łącznicach"] = len(set(
-        adresy.sindex.query(nowe, predicate="intersects").tolist()))
-
-  budynki = wczytaj_budynki()
-  if budynki is not None and len(budynki):
-    wynik["budynki w łącznicach"] = len(set(
-        budynki.sindex.query(nowe, predicate="intersects").tolist()))
-
+  # Adresy i budynki w lacznicach licza sie same, jako strefa "w łącznicach"
+  # obok "w śladzie" i "nad tunelem" — tutaj zostaja dzialki, ktore stref
+  # nie maja, i sama powierzchnia.
   trafione = zajete_dzialki(wariant, nowe)
   if trafione is not None:
     wynik["działki w łącznicach"] = len(trafione)
@@ -498,7 +519,13 @@ def podsumuj(wariant, adresy, budynki=None, teren=None):
   for nazwa in nazwy_stref():
     wiersz[nazwa] = int(liczby.get(nazwa, 0)) if len(adresy) else 0
 
-  wiersz[DO_ROZBIORKI] = wiersz[W_SLADZIE] + wiersz[NAD_TUNELEM]
+  # Lacznice wchodza do rozbiorki na rowni ze sladem: budynek stojacy w pasie
+  # lacznicy znika tak samo jak ten pod jezdnia. Roznica jest taka, ze pas
+  # lacznicy ma przyjeta szerokosc (consts.SZEROKOSC_LACZNICY), wiec te kilka
+  # obiektow niesie zalozenie — dlatego "w łącznicach" zostaje tez osobna
+  # kolumna, zeby dalo sie je odliczyc.
+  wiersz[DO_ROZBIORKI] = (wiersz[W_SLADZIE] + wiersz[NAD_TUNELEM]
+                          + wiersz[W_LACZNICACH])
 
   narastajaco = wiersz[DO_ROZBIORKI]
   poprzedni = 0
@@ -558,14 +585,16 @@ def zapisz_liste_rozbiorek():
   L.append(">   kilka metrów od punktu, więc pojedyncze trafienia mogą być mylne,")
   L.append("> - kategoria „nad tunelem” zakłada budowę metodą odkrywkową, czego materiały")
   L.append(">   nie rozstrzygają; nad tunelem drążonym budynki zostają,")
+  L.append("> - kategoria „w łącznicach” opiera się na przyjętej szerokości łącznicy")
+  L.append(">   (8 m od osi) — materiały rysują łącznice samą kreską,")
   L.append("> - dane adresowe: PRG (GUGiK){}.".format(
       ", stan na {}".format(stan.strftime("%d.%m.%Y")) if stan else ""))
   L.append(">")
   L.append("> Metoda, kalibracja i kontrole: README.md i warstwy.md w repozytorium")
   L.append("> <https://github.com/lechup/stop-s7>")
   L.append("")
-  L.append("Poniżej punkty adresowe leżące w śladzie drogi lub w pasie wykopu nad")
-  L.append("tunelem, pogrupowane po miejscowościach.")
+  L.append("Poniżej punkty adresowe leżące w śladzie drogi, w pasie wykopu nad")
+  L.append("tunelem albo w łącznicach węzłów, pogrupowane po miejscowościach.")
   L.append("")
   for wariant in consts.VARIANTS:
     plik = "{}/wariant-{}-rozbiorka.csv".format(KATALOG_WYNIKOW, wariant)
@@ -577,10 +606,12 @@ def zapisz_liste_rozbiorek():
     if adresy.empty:
       L.append("_Brak adresów._\n")
       continue
-    L.append("Razem: **{}** adresów ({} w śladzie, {} nad tunelem).".format(
-        len(adresy),
-        int((adresy["strefa"] == W_SLADZIE).sum()),
-        int((adresy["strefa"] == NAD_TUNELEM).sum())))
+    L.append("Razem: **{}** adresów ({} w śladzie, {} nad tunelem, "
+             "{} w łącznicach węzłów).".format(
+                 len(adresy),
+                 int((adresy["strefa"] == W_SLADZIE).sum()),
+                 int((adresy["strefa"] == NAD_TUNELEM).sum()),
+                 int((adresy["strefa"] == W_LACZNICACH).sum())))
     L.append("")
     adresy = adresy.assign(_klucz=adresy["NUMER_PORZ"].map(_klucz_numeru))
     for msc, grupa in adresy.groupby("NAZWA_MSC", sort=True, dropna=False):
@@ -676,7 +707,8 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
     adresy.drop(columns="geometry").to_csv(podstawa + "-adresy.csv", index=False)
 
     # Lista do rozbiorki: slad powierzchniowy + pas odkrywki nad tunelem.
-    rozbiorka = adresy[adresy["strefa"].isin([W_SLADZIE, NAD_TUNELEM])]
+    rozbiorka = adresy[adresy["strefa"].isin(
+        [W_SLADZIE, NAD_TUNELEM, W_LACZNICACH])]
     rozbiorka = rozbiorka.assign(
         _klucz=rozbiorka["NUMER_PORZ"].map(_klucz_numeru)).sort_values(
         ["NAZWA_MSC", "NAZWA_ULC", "_klucz"], na_position="first").drop(
@@ -721,9 +753,10 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
                                warstwy.get("lacznice")))
     wiersz = podsumuj(wariant, adresy, budynki, teren)
     podsumowania.append(wiersz)
-    postep("  do rozbiorki {} ({} w sladzie + {} nad tunelem), ≤200 m {}".format(
-        wiersz[DO_ROZBIORKI], wiersz[W_SLADZIE], wiersz[NAD_TUNELEM],
-        wiersz["≤{} m".format(consts.STREFY[-1])],))
+    postep("  do rozbiorki {} ({} w sladzie + {} nad tunelem "
+           "+ {} w lacznicach), ≤200 m {}".format(
+               wiersz[DO_ROZBIORKI], wiersz[W_SLADZIE], wiersz[NAD_TUNELEM],
+               wiersz[W_LACZNICACH], wiersz["≤{} m".format(consts.STREFY[-1])]))
     if budynki is not None:
       postep("  budynkow w korytarzu {} (mieszkalnych {}), ≤200 m {}".format(
           wiersz[BUDYNKI], wiersz[BUDYNKI_MIESZKALNE],
@@ -757,7 +790,7 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
   zapisz_liste_dzialek()
   # Pelna tabela ma ponad 50 kolumn — w terminalu pokazujemy przekroj,
   # komplet i tak idzie do podsumowanie.csv.
-  skrot = ["wariant", W_SLADZIE, NAD_TUNELEM, DO_ROZBIORKI,
+  skrot = ["wariant", W_SLADZIE, NAD_TUNELEM, W_LACZNICACH, DO_ROZBIORKI,
            "≤{} m".format(consts.STREFY[-1]), BUDYNKI, BUDYNKI_MIESZKALNE,
            BUDYNKI_OSWIATA, BUDYNKI_ZDROWIE, "działki", "zajęte [ha]"]
   skrot = [k for k in skrot if k in tabela.columns]
@@ -857,9 +890,17 @@ def sprawdz_adres(zapytanie, postep=print):
         "{}/wariant-{}-slad.gpkg".format(KATALOG_WYNIKOW, wariant),
         layer=WARSTWA_KORYTARZ)
     powierzchnia = warstwy[warstwy["rodzaj"] == "powierzchnia"]
+    try:
+      pas = gpd.read_file(
+          "{}/wariant-{}-slad.gpkg".format(KATALOG_WYNIKOW, wariant),
+          layer=WARSTWA_LACZNIC)
+      lacznice = shapely.union_all(pas.geometry.values)
+    except Exception:
+      lacznice = None
     korytarze[wariant] = (
         shapely.union_all(warstwy.geometry.values),
         shapely.union_all(powierzchnia.geometry.values) if not powierzchnia.empty else None,
+        lacznice,
     )
 
   # Przy wielu trafieniach pelna tabelka na kazdy adres to sciana tekstu —
@@ -880,29 +921,37 @@ def sprawdz_adres(zapytanie, postep=print):
     if not zwiezle:
       postep(opis)
       postep("  {:<9} {:>14} {:>16}   {}".format(
-          "wariant", "od korytarza", "od powierzchni", "strefa"))
+          "wariant", "od drogi", "od powierzchni", "strefa"))
     punkt = adres.geometry
     wiersze_adresu = []
     for wariant in consts.VARIANTS:
-      korytarz, powierzchnia = korytarze[wariant]
+      korytarz, powierzchnia, pas_lacznic = korytarze[wariant]
       od_korytarza = shapely.distance(punkt, korytarz)
       od_powierzchni = (shapely.distance(punkt, powierzchnia)
                         if powierzchnia is not None else None)
-      if od_korytarza > max(consts.STREFY):
+      od_lacznic = (shapely.distance(punkt, pas_lacznic)
+                    if pas_lacznic is not None else None)
+      # Odleglosc podajemy do drogi, a wiec do blizszego z dwojga: korytarza
+      # albo lacznicy wezla.
+      od_drogi = (od_korytarza if od_lacznic is None
+                  else min(od_korytarza, od_lacznic))
+      if od_drogi > max(consts.STREFY):
         strefa = "poza {} m".format(max(consts.STREFY))
       elif od_powierzchni == 0:
         strefa = W_SLADZIE.upper()
       elif od_korytarza == 0:
         strefa = NAD_TUNELEM.upper()
+      elif od_lacznic == 0:
+        strefa = W_LACZNICACH.upper()
       else:
-        strefa = _strefa(od_korytarza)
+        strefa = _strefa(od_drogi)
       if not zwiezle:
         postep("  {:<9} {:>13.1f}m {:>15.1f}m   {}".format(
-            wariant, od_korytarza,
+            wariant, od_drogi,
             od_powierzchni if od_powierzchni is not None else float("nan"),
             strefa))
       wiersz = {"adres": opis, "wariant": wariant,
-                "odleglosc_m": round(od_korytarza, 1), "strefa": strefa}
+                "odleglosc_m": round(od_drogi, 1), "strefa": strefa}
       wiersze_adresu.append(wiersz)
       wyniki.append(wiersz)
 

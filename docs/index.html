@@ -219,7 +219,8 @@
       <h2>Korytarz przechodzi przez</h2>
       <table class="miary"><tbody id="miary-terenu"></tbody></table>
       <p class="uwaga">Miary dotyczą całego korytarza — śladu drogi razem
-      z pasem nad tunelem. W hektarach, poza liczbą działek.</p>
+      z pasem nad tunelem. Łącznice węzłów liczone są osobno, bo ich szerokość
+      jest przyjęta. W hektarach, poza liczbą działek.</p>
     </div>
 
     <div class="sekcja">
@@ -232,7 +233,7 @@
           <td class="liczba" id="razem-budynki">—</td></tr></tfoot>
       </table>
       <p class="info" style="margin-top:6px">
-        <a href="#" id="tylko-slad">tylko ślad</a> ·
+        <a href="#" id="tylko-slad">przy drodze</a> ·
         <a href="#" id="wszystkie-strefy">wszystkie</a></p>
     </div>
 
@@ -336,7 +337,12 @@ function opisRodzaju(kod) {
   return RODZAJE[kod] || ("nieopisany kod „" + kod + "”");
 }
 const BARWY = ["#8a8a8a", "var(--slad)", "var(--tunel)", "#f5c211", "#99c1f1", "#62a0ea", "#b5cee4"];
-const BARWY_HEX = ["#8a8a8a", "#c01c28", "#e66100", "#f5c211", "#99c1f1", "#62a0ea", "#b5cee4"];
+// Kolejnosc odpowiada kodom stref: 0 poza, 1 w sladzie, 2 nad tunelem,
+// 3 w lacznicach, dalej strefy odlegloscowe. Lacznice dostaja wlasny odcien,
+// a nie kolejny stopien czerwieni — to inna kategoria, oparta na przyjetej
+// szerokosci, a nie na zmierzonym sladzie.
+const BARWY_HEX = ["#8a8a8a", "#c01c28", "#e66100", "#9141ac", "#f5c211",
+                   "#99c1f1", "#62a0ea", "#b5cee4"];
 
 let wariantAktywny = "A";
 const wczytane = {};        // wariant -> GeoJSON
@@ -371,8 +377,12 @@ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 }).addTo(mapa);
 
-const STREFY_NAZWY = ["w śladzie", "nad tunelem", "0-20 m", "20-30 m",
-                      "30-50 m", "50-200 m"];
+const STREFY_NAZWY = ["w śladzie", "nad tunelem", "w łącznicach", "0-20 m",
+                      "20-30 m", "30-50 m", "50-200 m"];
+// Kategorie przylegajace do drogi — odleglosc zero, wiec nie maja progu.
+const PRZY_DRODZE = 3;
+const przyDrodze = (strefa) => STREFY_NAZWY.indexOf(strefa) > -1 &&
+  STREFY_NAZWY.indexOf(strefa) < PRZY_DRODZE;
 const BEZ_STREFY = "—";
 const podgrupy = {};   // warstwa -> strefa -> L.LayerGroup
 // Budynki dzielimy dodatkowo po rodzaju, zeby dalo sie ogladac same domy albo
@@ -700,7 +710,8 @@ function etykietaStrefy(kod, progi) {
   if (kod === 0) return "poza " + progi[progi.length - 1] + " m";
   if (kod === 1) return "w śladzie";
   if (kod === 2) return "nad tunelem";
-  const i = kod - 3;
+  if (kod === 3) return "w łącznicach";
+  const i = kod - 1 - PRZY_DRODZE;
   const od = i === 0 ? 0 : progi[i - 1];
   return od + "–" + progi[i] + " m";
 }
@@ -708,9 +719,10 @@ function etykietaStrefy(kod, progi) {
 function kodStrefyZNazwy(nazwa) {
   if (nazwa === "w śladzie") return 1;
   if (nazwa === "nad tunelem") return 2;
+  if (nazwa === "w łącznicach") return 3;
   const m = /^(\d+)-(\d+)/.exec(nazwa || "");
   if (!m) return 0;
-  return 3 + ["20", "30", "50", "200"].indexOf(m[2]);
+  return 1 + PRZY_DRODZE + ["20", "30", "50", "200"].indexOf(m[2]);
 }
 
 function promienPunktu() {
@@ -799,14 +811,14 @@ function opisObiektu(p) {
     if (Number(p.KONDYGNACJE_PODZIEMNE) > 0)
       kond.push(p.KONDYGNACJE_PODZIEMNE + " podziemne");
     if (kond.length) wiersze.push("kondygnacje: " + kond.join(", "));
-    wiersze.push(p.strefa === "w śladzie" || p.strefa === "nad tunelem"
+    wiersze.push(przyDrodze(p.strefa)
       ? "<strong>" + p.strefa + "</strong>"
       : (p.strefa || "") + (p.odleglosc_m != null ? " (" + p.odleglosc_m + " m)" : ""));
     wiersze.push('<span class="uwaga">EGiB, wariant ' + wariantAktywny + "</span>");
     return wiersze.join("<br>");
   }
   const ulica = [p.NAZWA_ULC, p.NUMER_PORZ].filter(Boolean).join(" ");
-  const strefa = p.strefa === "w śladzie" || p.strefa === "nad tunelem"
+  const strefa = przyDrodze(p.strefa)
     ? "<strong>" + p.strefa + "</strong>"
     : (p.strefa || "") + " (" + (p.odleglosc_m ?? "?") + " m)";
   return "<strong>" + (ulica || p.NUMER_PORZ || "adres") + "</strong><br>" +
@@ -1122,7 +1134,7 @@ STREFY_NAZWY.forEach((strefa, i) => {
 
 function ustawStrefy(wlaczone) {
   document.querySelectorAll("[data-strefa]").forEach((pole, i) => {
-    pole.checked = wlaczone === "wszystkie" ? true : i < 2;
+    pole.checked = wlaczone === "wszystkie" ? true : i < PRZY_DRODZE;
   });
   odswiezStrefy();
   odswiezLiczby();

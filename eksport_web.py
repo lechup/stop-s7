@@ -43,7 +43,10 @@ POZA = 0
 KODY_STREF = {
     functions.W_SLADZIE: 1,
     functions.NAD_TUNELEM: 2,
+    functions.W_LACZNICACH: 3,
 }
+# Strefy odlegloscowe zaczynaja sie za kategoriami przylegajacymi do drogi.
+PIERWSZA_STREFA = 1 + len(KODY_STREF)
 
 
 def zaokraglij(wartosc):
@@ -339,21 +342,32 @@ def warstwy_wariantu(wariant):
   return {"type": "FeatureCollection", "features": obiekty}
 
 
-def strefa_kod(od_korytarza, od_powierzchni):
-  """Ta sama logika, co w functions.sprawdz_adres, sprowadzona do liczby."""
-  if od_korytarza > max(consts.STREFY):
+def strefa_kod(od_drogi, od_powierzchni, od_korytarza, od_lacznic):
+  """Ta sama logika, co w functions.policz, sprowadzona do liczby.
+
+  od_drogi to odleglosc do trasy razem z lacznicami wezlow — bo dom 40 m od
+  slimaka jest w strefie 30-50 m tak samo, jak 40 m od trasy glownej."""
+  if od_drogi > max(consts.STREFY):
     return POZA
   if od_powierzchni is not None and od_powierzchni == 0:
     return KODY_STREF[functions.W_SLADZIE]
   if od_korytarza == 0:
     return KODY_STREF[functions.NAD_TUNELEM]
-  nazwa = functions._strefa(od_korytarza)
-  return 3 + consts.STREFY.index(int(nazwa.split("-")[1].split()[0]))
+  if od_lacznic is not None and od_lacznic == 0:
+    return KODY_STREF[functions.W_LACZNICACH]
+  nazwa = functions._strefa(od_drogi) or functions._pierwsza_strefa()
+  return PIERWSZA_STREFA + consts.STREFY.index(
+      int(nazwa.split("-")[1].split()[0]))
 
 
-def indeks_adresow(korytarze, powierzchnie):
-  """Adresy w promieniu PROMIEN_INDEKSU od ktoregokolwiek wariantu."""
-  unia = shapely.union_all(list(korytarze.values()))
+def indeks_adresow(korytarze, powierzchnie, lacznice):
+  """Adresy w promieniu PROMIEN_INDEKSU od ktoregokolwiek wariantu.
+
+  Zasieg obejmuje takze lacznice wezlow — dom moze lezec 800 m od trasy
+  glownej i 50 m od slimaka, a wtedy interesuje go wlasnie slimak."""
+  drogi = list(korytarze.values()) + [g for g in lacznice.values()
+                                      if g is not None]
+  unia = shapely.union_all(drogi)
   obszar = shapely.buffer(unia, PROMIEN_INDEKSU)
   adresy = functions.wczytaj_adresy(obszar)
   trafienia = sorted(set(adresy.sindex.query(obszar, predicate="contains")))
@@ -371,8 +385,13 @@ def indeks_adresow(korytarze, powierzchnie):
       powierzchnia = powierzchnie.get(wariant)
       od_powierzchni = (shapely.distance(punkt, powierzchnia)
                         if powierzchnia is not None else None)
-      pomiary.append([round(od_korytarza),
-                      strefa_kod(od_korytarza, od_powierzchni)])
+      pas = lacznice.get(wariant)
+      od_lacznic = shapely.distance(punkt, pas) if pas is not None else None
+      od_drogi = (od_korytarza if od_lacznic is None
+                  else min(od_korytarza, od_lacznic))
+      pomiary.append([round(od_drogi),
+                      strefa_kod(od_drogi, od_powierzchni, od_korytarza,
+                                 od_lacznic)])
     wiersze.append([
         tekst(rekord.get("NAZWA_ULC")),
         tekst(rekord.get("NUMER_PORZ")),
@@ -400,7 +419,7 @@ def indeks_adresow(korytarze, powierzchnie):
 if __name__ == "__main__":
   os.makedirs(KATALOG, exist_ok=True)
 
-  korytarze, powierzchnie = {}, {}
+  korytarze, powierzchnie, lacznice = {}, {}, {}
 
   razem = 0
   for wariant in consts.VARIANTS:
@@ -413,6 +432,11 @@ if __name__ == "__main__":
     powierzchnia = warstwy[warstwy["rodzaj"] == "powierzchnia"]
     powierzchnie[wariant] = (shapely.union_all(powierzchnia.geometry.values)
                              if not powierzchnia.empty else None)
+    try:
+      pas = gpd.read_file(sciezka, layer="lacznice")
+      lacznice[wariant] = shapely.union_all(pas.geometry.values)
+    except Exception:
+      lacznice[wariant] = None
 
     zbior = warstwy_wariantu(wariant)
     korytarz = shapely.union_all(warstwy.geometry.values)
@@ -446,7 +470,7 @@ if __name__ == "__main__":
     print("\nMiary terenowe do panelu: {:.0f} kB".format(rozmiar / 1024))
 
   print("\nIndeks wyszukiwarki (promien {} m):".format(PROMIEN_INDEKSU))
-  wiersze = indeks_adresow(korytarze, powierzchnie)
+  wiersze = indeks_adresow(korytarze, powierzchnie, lacznice)
   rozmiar = zapisz_json("{}/adresy-index.json".format(KATALOG), {
       "warianty": consts.VARIANTS,
       "progi": consts.STREFY,

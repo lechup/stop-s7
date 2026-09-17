@@ -45,14 +45,18 @@ tam czego domknąć: przy węźle ze śladu zostają tylko poligony estakad.
 Nie da się z rysunku odczytać, jak szerokie są łącznice, więc szerokość
 **przyjmujemy**: 8 m od kreski w każdą stronę, tyle co jednopasowa łącznica
 z poboczami. To jedyne założenie w całym wyliczeniu i dlatego łącznice **nie
-wchodzą do kolumny `w śladzie`** — mają własne:
+wchodzą do kolumny `w śladzie`** — mają własną strefę `w łącznicach`, a obok
+niej kolumny powierzchniowe:
 
 | kolumna | co znaczy |
 |---|---|
+| `w łącznicach` | punkty adresowe PRG w pasie łącznic — wliczone do `do rozbiórki` |
+| `budynki w łącznicach` | obrysy EGiB tamże — i tak samo dla rodzajów budynków |
 | `łącznice [ha]` | teren łącznic leżący **poza** śladem drogi |
-| `adresy w łącznicach` | punkty adresowe PRG w tym pasie |
-| `budynki w łącznicach` | obrysy EGiB w tym pasie |
 | `działki w łącznicach` | działki ewidencyjne, których ten pas dotyka |
+
+Odległości 20/30/50/200 m liczą się także od łącznic — patrz sekcja o strefach
+wyżej.
 
 Rząd wielkości:
 
@@ -101,10 +105,26 @@ Pas wykopu przyjęto jako ±30 m od osi tunelu — tyle, ile wynosi połowa
 zmierzonej szerokości śladu na powierzchni (47,7–57,9 m). Steruje tym
 `SZEROKOSC_ODKRYWKI` w [consts.py](consts.py).
 
-**Strefy** są rozłączne (`w śladzie`, `nad tunelem`, `0-20 m`, `20-30 m`,
-`30-50 m`, `50-200 m`), a obok nich raport podaje kolumny narastające
-(`≤20 m` … `≤200 m`), liczone od krawędzi korytarza — czyli śladu powierzchniowego
-razem z pasem nad tunelem.
+**Strefy** są rozłączne (`w śladzie`, `nad tunelem`, `w łącznicach`, `0-20 m`,
+`20-30 m`, `30-50 m`, `50-200 m`), a obok nich raport podaje kolumny narastające
+(`≤20 m` … `≤200 m`). Odległość liczona jest **do drogi**, czyli do bliższego
+z dwojga: korytarza (ślad powierzchniowy razem z pasem nad tunelem) albo
+łącznicy węzła. Dom 40 m od ślimaka trafia więc do `30-50 m`, choć od trasy
+głównej dzieli go 300 m.
+
+`w łącznicach` jest trzecią kategorią przylegającą do drogi, obok `w śladzie`
+i `nad tunelem`: budynek stojący w pasie łącznicy znika tak samo jak ten pod
+jezdnią, więc liczy się do rozbiórki.
+
+```
+do rozbiórki  =  w śladzie  +  nad tunelem  +  w łącznicach
+≤20 m         =  do rozbiórki  +  0-20 m
+```
+
+Zostaje jednak osobną kolumną, bo niesie założenie, którego dwie pozostałe nie
+mają — szerokość łącznicy jest **przyjęta** (8 m od osi), a nie odczytana
+z rysunku. Kto chce liczby wolnej od tego założenia, odejmuje `w łącznicach`
+od `do rozbiórki`.
 
 ## Wyniki
 
@@ -118,7 +138,7 @@ W katalogu `raporty/`:
 | `wariant-X-rozbiorka.csv` | te same adresy w formie tabelarycznej |
 | `wariant-X-adresy.csv` | wszystkie adresy do 200 m: odległość i strefa |
 | `wariant-X-dzialki.csv` | działki przecinane przez korytarz: TERYT, udział zajęcia, zabudowa |
-| `wariant-X-slad.gpkg` | do QGIS: warstwy `korytarz`, `budynki` i `adresy` |
+| `wariant-X-slad.gpkg` | do QGIS: warstwy `korytarz`, `lacznice`, `budynki` i `adresy` |
 
 ### Adresy a budynki — dwie różne miary
 
