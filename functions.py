@@ -421,16 +421,80 @@ def wczytaj_kontekst(warstwa):
 PROGI_ZAJECIA = [50, 90]
 
 
+_dzialki_wariantow = {}
+
+
+def wczytaj_dzialki(wariant):
+  """Dzialki ewidencyjne wariantu (None, gdy warstwy nie ma).
+
+  Trzymamy je w pamieci podrecznej, bo czyta je i zliczanie zajecia, i podzial
+  na strefy — a make_valid na kilkunastu tysiacach wieloboków nie jest darmowe."""
+  if wariant not in _dzialki_wariantow:
+    try:
+      dzialki = gpd.read_file(geometria.sciezka(wariant), layer="dzialki")
+      dzialki = dzialki.to_crs(consts.CRS_METRYCZNY)
+      dzialki["geometry"] = shapely.make_valid(dzialki.geometry.values)
+      _dzialki_wariantow[wariant] = dzialki
+    except Exception:
+      _dzialki_wariantow[wariant] = None
+  return _dzialki_wariantow[wariant]
+
+
+def strefy_dzialek(wariant, warstwy):
+  """Strefa kazdej dzialki w zasiegu 200 m — ta sama siatka co adresy i budynki.
+
+  Dzialka nie ma jednej odleglosci, tylko ksztalt, wiec liczymy od jej
+  najblizszego punktu: dzialka przecieta przez slad jest "w sladzie", a ta
+  odsunieta o 15 m — w strefie 0-20 m."""
+  dzialki = wczytaj_dzialki(wariant)
+  if dzialki is None or dzialki.empty:
+    return pd.Series(dtype=object)
+
+  zasieg = warstwy.get("zasieg")
+  if zasieg is None:
+    zasieg = warstwy["korytarz"]
+  czesci = gpd.GeoDataFrame(
+      geometry=list(shapely.get_parts(zasieg)), crs=consts.CRS_METRYCZNY)
+  pary = gpd.sjoin_nearest(dzialki, czesci,
+                           max_distance=float(max(consts.STREFY)),
+                           distance_col="odleglosc_m", how="inner")
+  if pary.empty:
+    return pd.Series(dtype=object)
+  pary = pary.sort_values("odleglosc_m").groupby(level=0).first()
+
+  w_sladzie = set(dzialki.sindex.query(
+      warstwy["powierzchnia"], predicate="intersects"))
+  nad_tunelem = set()
+  if warstwy.get("tunel") is not None:
+    nad_tunelem = set(dzialki.sindex.query(
+        warstwy["tunel"], predicate="intersects")) - w_sladzie
+  w_lacznicach = set()
+  if warstwy.get("lacznice") is not None:
+    w_lacznicach = set(dzialki.sindex.query(
+        warstwy["lacznice"], predicate="intersects")) - w_sladzie - nad_tunelem
+
+  pozycje = {idx: i for i, idx in enumerate(dzialki.index)}
+  strefy = []
+  for idx, odleglosc in zip(pary.index, pary["odleglosc_m"]):
+    pozycja = pozycje[idx]
+    if pozycja in w_sladzie:
+      strefy.append(W_SLADZIE)
+    elif pozycja in nad_tunelem:
+      strefy.append(NAD_TUNELEM)
+    elif pozycja in w_lacznicach:
+      strefy.append(W_LACZNICACH)
+    else:
+      strefy.append(_strefa(odleglosc) or _pierwsza_strefa())
+  return pd.Series(strefy)
+
+
 def zajete_dzialki(wariant, korytarz):
   """Dzialki przeciete przez korytarz, z udzialem zajecia i informacja o zabudowie.
 
   Zwraca GeoDataFrame z kolumnami udzial_proc i zabudowana."""
-  try:
-    dzialki = gpd.read_file(geometria.sciezka(wariant), layer="dzialki")
-  except Exception:
+  dzialki = wczytaj_dzialki(wariant)
+  if dzialki is None:
     return None
-  dzialki = dzialki.to_crs(consts.CRS_METRYCZNY)
-  dzialki["geometry"] = shapely.make_valid(dzialki.geometry.values)
   trafione = dzialki.iloc[sorted(set(
       dzialki.sindex.query(korytarz, predicate="intersects")))].copy()
   if trafione.empty:
@@ -466,30 +530,37 @@ def miary_lacznic(wariant, korytarz, pas):
   if shapely.is_empty(nowe):
     return wynik
 
-  # Adresy i budynki w lacznicach licza sie same, jako strefa "w łącznicach"
-  # obok "w śladzie" i "nad tunelem" — tutaj zostaja dzialki, ktore stref
-  # nie maja, i sama powierzchnia.
-  trafione = zajete_dzialki(wariant, nowe)
-  if trafione is not None:
-    wynik["działki w łącznicach"] = len(trafione)
+  # Adresy, budynki i dzialki w lacznicach licza sie same, jako strefa
+  # "w łącznicach" obok "w śladzie" i "nad tunelem" — tutaj zostaje sama
+  # powierzchnia, ktorej strefy nie pokazuja.
   return wynik
 
 
-def miary_terenu(wariant, korytarz):
-  """Ile korytarza przypada na dzialki ewidencyjne i tereny wrazliwe.
+def miary_terenu(wariant, warstwy):
+  """Ile drogi przypada na dzialki ewidencyjne i tereny wrazliwe.
 
-  Dzialki sa wlasne dla wariantu (przyciete do jego obszaru), reszta wspolna."""
+  Dzialki sa wlasne dla wariantu (przyciete do jego obszaru), reszta wspolna.
+  Zajecie liczymy od korytarza RAZEM z lacznicami wezlow — dzialka pod
+  slimakiem jest zajeta tak samo jak ta pod jezdnia."""
+  korytarz = warstwy["korytarz"]
+  zasieg = warstwy.get("zasieg")
+  if zasieg is None:
+    zasieg = korytarz
   wynik = {}
 
-  trafione = zajete_dzialki(wariant, korytarz)
+  trafione = zajete_dzialki(wariant, zasieg)
   if trafione is not None and len(trafione):
-    wynik["działki"] = len(trafione)
     wynik["zajęte [ha]"] = round(trafione["zajete_m2"].sum() / 10000, 1)
     wynik["działki zabudowane"] = int(trafione["zabudowana"].sum())
     wynik["działki niezabudowane"] = int((~trafione["zabudowana"]).sum())
     for prog in PROGI_ZAJECIA:
       wynik["działki zajęte >{}%".format(prog)] = int(
           (trafione["udzial_proc"] > prog).sum())
+
+  # Strefy dzialek w tej samej siatce, co adresy i budynki. Kolumna "działki"
+  # powstaje tu jako suma kategorii przylegajacych do drogi — i zgadza sie
+  # z liczba dzialek przecietych przez zasieg wyzej.
+  _dopisz_strefy(wynik, "działki", strefy_dzialek(wariant, warstwy))
 
   for warstwa, kolumna in WARSTWY_TERENU.items():
     obszar = wczytaj_kontekst(warstwa)
@@ -645,6 +716,11 @@ def zapisz_liste_dzialek():
   L.append("> działek pochodzą z materiałów STEŚ, a nie wprost z ewidencji, więc przy")
   L.append("> małych udziałach różnica rzędu ułamka procenta jest w granicach błędu.")
   L.append(">")
+  L.append("> Zajęcie obejmuje ślad drogi razem z pasem nad tunelem i z łącznicami")
+  L.append("> węzłów. Łącznice materiały rysują samą kreską, więc ich szerokość jest")
+  L.append("> przyjęta (8 m od osi) — przy działkach tykanych tylko przez węzeł udział")
+  L.append("> zajęcia jest z tego powodu mniej pewny niż przy trasie głównej.")
+  L.append(">")
   L.append("> Metoda i kontrole: README.md w repozytorium")
   L.append("> <https://github.com/lechup/stop-s7>")
   L.append("")
@@ -715,7 +791,7 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
         columns="_klucz")
     rozbiorka.drop(columns="geometry").to_csv(podstawa + "-rozbiorka.csv", index=False)
 
-    zajete = zajete_dzialki(wariant, warstwy["korytarz"])
+    zajete = zajete_dzialki(wariant, warstwy.get("zasieg") or warstwy["korytarz"])
     if zajete is not None and len(zajete):
       zajete.drop(columns="geometry").to_csv(
           podstawa + "-dzialki.csv", index=False)
@@ -748,7 +824,7 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
         adresy.to_file(sciezka_gpkg, driver="GPKG",
                        layer=WARSTWA_ADRESY, mode="a")
 
-    teren = miary_terenu(wariant, warstwy["korytarz"])
+    teren = miary_terenu(wariant, warstwy)
     teren.update(miary_lacznic(wariant, warstwy["korytarz"],
                                warstwy.get("lacznice")))
     wiersz = podsumuj(wariant, adresy, budynki, teren)

@@ -128,13 +128,23 @@ def zapisz_miary():
     return 0
   tabela = pd.read_csv(sciezka)
   wynik = {"kolejnosc": [[k, o, j] for k, o, j in MIARY_DO_PANELU],
-           "przy_warstwie": MIARA_WARSTWY, "warianty": {}}
+           "przy_warstwie": MIARA_WARSTWY, "warianty": {}, "dzialki_w_strefach": {}}
   for _, wiersz in tabela.iterrows():
     dane = {}
     for kolumna, _opis, _jedn in MIARY_DO_PANELU:
       if kolumna in wiersz and pd.notna(wiersz[kolumna]):
         dane[kolumna] = float(wiersz[kolumna])
     wynik["warianty"][wiersz["wariant"]] = dane
+
+    # Dzialki w strefach ida osobno: mapa liczy adresy i budynki z wczytanych
+    # warstw, ale dzialek dalszych niz sam korytarz nie sciaga (byloby ich
+    # dziesiatki tysiecy), wiec te liczby biora sie wprost z raportu.
+    strefy = {}
+    for strefa in functions.nazwy_stref():
+      kolumna = "działki {}".format(strefa)
+      if kolumna in wiersz and pd.notna(wiersz[kolumna]):
+        strefy[strefa] = int(wiersz[kolumna])
+    wynik["dzialki_w_strefach"][wiersz["wariant"]] = strefy
   return zapisz_json("{}/miary.json".format(KATALOG), wynik)
 
 
@@ -184,7 +194,7 @@ def warstwy_kontekstowe(korytarz, postep=print):
 
 
 def warstwa_dzialek(wariant, korytarz, postep=print):
-  """Dzialki ewidencyjne przecinajace korytarz."""
+  """Dzialki ewidencyjne przecinane przez droge — slad razem z lacznicami."""
   import geopandas as gpd
   try:
     gdf = gpd.read_file("warianty/wariant-{}.gpkg".format(wariant), layer="dzialki")
@@ -419,7 +429,7 @@ def indeks_adresow(korytarze, powierzchnie, lacznice):
 if __name__ == "__main__":
   os.makedirs(KATALOG, exist_ok=True)
 
-  korytarze, powierzchnie, lacznice = {}, {}, {}
+  korytarze, powierzchnie, lacznice, zasiegi = {}, {}, {}, {}
 
   razem = 0
   for wariant in consts.VARIANTS:
@@ -437,9 +447,15 @@ if __name__ == "__main__":
       lacznice[wariant] = shapely.union_all(pas.geometry.values)
     except Exception:
       lacznice[wariant] = None
+    # Zasieg drogi = slad z pasem nad tunelem RAZEM z lacznicami wezlow.
+    # Dzialki, warstwy terenowe i indeks licza sie od niego, bo dzialka pod
+    # slimakiem jest zajeta tak samo jak ta pod jezdnia.
+    zasiegi[wariant] = (korytarze[wariant] if lacznice[wariant] is None
+                        else shapely.union_all([korytarze[wariant],
+                                                lacznice[wariant]]))
 
     zbior = warstwy_wariantu(wariant)
-    korytarz = shapely.union_all(warstwy.geometry.values)
+    korytarz = zasiegi[wariant]
     zbior["features"].extend(warstwy_kontekstowe(korytarz))
     rozmiar = zapisz_json("{}/wariant-{}.geojson".format(KATALOG, wariant), zbior)
 
@@ -455,7 +471,7 @@ if __name__ == "__main__":
     print("  wariant {}: {:.0f} kB".format(wariant, rozmiar / 1024))
 
   print("\nIndeks działek:")
-  wpisy = indeks_dzialek(korytarze)
+  wpisy = indeks_dzialek(zasiegi)
   rozmiar = zapisz_json("{}/dzialki-index.json".format(KATALOG), {
       "warianty": consts.VARIANTS,
       "promien": PROMIEN_INDEKSU,

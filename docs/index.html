@@ -256,23 +256,30 @@
     <div class="sekcja">
       <h2>Korytarz przechodzi przez</h2>
       <table class="miary"><tbody id="miary-terenu"></tbody></table>
-      <p class="uwaga">Miary dotyczą całego korytarza — śladu drogi razem
-      z pasem nad tunelem. Łącznice węzłów liczone są osobno, bo ich szerokość
-      jest przyjęta. W hektarach, poza liczbą działek.</p>
+      <p class="uwaga">Działki i zajęta powierzchnia obejmują całą drogę: ślad,
+      pas nad tunelem i łącznice węzłów. Miary terenowe — osuwiska, tereny
+      zalewowe, obszary chronione — liczone są od samego korytarza, bez łącznic,
+      bo ich szerokość jest przyjęta; osobny wiersz pokazuje, ile terenu
+      dokładają poza śladem. W hektarach, poza liczbą działek.</p>
     </div>
 
     <div class="sekcja">
       <h2>Strefy i liczby</h2>
       <table class="strefy-tab">
-        <thead><tr><th>strefa</th><th>adresy</th><th>budynki</th></tr></thead>
+        <thead><tr><th>strefa</th><th>adresy</th><th>budynki</th><th>działki</th></tr></thead>
         <tbody id="strefy"></tbody>
         <tfoot><tr class="razem"><td>razem wyświetlone</td>
           <td class="liczba" id="razem-adresy">—</td>
-          <td class="liczba" id="razem-budynki">—</td></tr></tfoot>
+          <td class="liczba" id="razem-budynki">—</td>
+          <td class="liczba" id="razem-dzialki">—</td></tr></tfoot>
       </table>
       <p class="info" style="margin-top:6px">
         <a href="#" id="tylko-slad">przy drodze</a> ·
         <a href="#" id="wszystkie-strefy">wszystkie</a></p>
+      <p class="uwaga">Adresy i budynki liczone są z tego, co widać na mapie,
+      więc idą za filtrami rodzaju i kondygnacji. Działki pochodzą wprost
+      z raportu — mapa ściąga tylko te przecinane przez drogę, bo dalszych
+      byłyby dziesiątki tysięcy.</p>
     </div>
 
     <div class="sekcja">
@@ -659,7 +666,8 @@ async function wczytajMiary() {
     const odpowiedz = await fetch("dane/miary.json");
     miary = await odpowiedz.json();
   } catch (blad) {
-    miary = { kolejnosc: [], przy_warstwie: {}, warianty: {} };
+    miary = { kolejnosc: [], przy_warstwie: {}, warianty: {},
+              dzialki_w_strefach: {} };
   }
   return miary;
 }
@@ -707,7 +715,12 @@ function odswiezMiary() {
 // Liczby przy przelacznikach: ile obiektow jest w kazdej strefie i ile widac
 // lacznie. Bez tego trzeba je zgadywac z mapy.
 function odswiezLiczby() {
-  let sumaA = 0, sumaB = 0;
+  let sumaA = 0, sumaB = 0, sumaD = 0;
+  // Dzialki w strefach biora sie z raportu, nie z wczytanych warstw — mapa ma
+  // tylko te przecinane przez droge, a strefy 20-200 m obejmuja ich dziesiatki
+  // tysiecy. Brak pliku miar nie moze wysypac tabeli, stad pusty obiekt.
+  const dzialkiStref = (miary && miary.dzialki_w_strefach &&
+                        miary.dzialki_w_strefach[wariantAktywny]) || {};
   for (const strefa of STREFY_NAZWY) {
     const wiersz = document.querySelector('[data-wiersz="' + strefa + '"]');
     if (!wiersz) continue;
@@ -715,8 +728,9 @@ function odswiezLiczby() {
     const liczby = {
       adresy: grupaAdresow ? grupaAdresow.getLayers().length : 0,
       budynki: liczbaBudynkow(strefa),
+      dzialki: dzialkiStref[strefa] || 0,
     };
-    for (const warstwa of ["adresy", "budynki"]) {
+    for (const warstwa of ["adresy", "budynki", "dzialki"]) {
       wiersz.querySelector('[data-liczba="' + warstwa + '"]').textContent =
         liczby[warstwa].toLocaleString("pl-PL");
     }
@@ -727,10 +741,12 @@ function odswiezLiczby() {
       // calej warstwy, nie tylko strefy.
       if (warstwaWlaczona("adresy")) sumaA += liczby.adresy;
       if (warstwaWlaczona("budynki")) sumaB += liczby.budynki;
+      sumaD += liczby.dzialki;
     }
   }
   document.getElementById("razem-adresy").textContent = sumaA.toLocaleString("pl-PL");
   document.getElementById("razem-budynki").textContent = sumaB.toLocaleString("pl-PL");
+  document.getElementById("razem-dzialki").textContent = sumaD.toLocaleString("pl-PL");
 }
 
 function warstwaWlaczona(nazwa) {
@@ -936,7 +952,10 @@ async function pokazWariant(wariant) {
     mapa.__dopasowano = true;
   }
   odswiezOpis();
-  wczytajMiary().then(odswiezMiary);
+  // Liczby dzialek w strefach siedza w tym samym pliku, wiec po jego wczytaniu
+  // trzeba odswiezyc takze tabele stref — przy pierwszym wejsciu leci ona
+  // zanim miary dojada.
+  wczytajMiary().then(() => { odswiezMiary(); odswiezLiczby(); });
   zbudujWyborBudynkow();
   odswiezWidocznoscBudynkow();
   odswiezLiczby();
@@ -1175,7 +1194,8 @@ STREFY_NAZWY.forEach((strefa, i) => {
     '<span class="znacznik" style="background:' + BARWY_HEX[i + 1] + '"></span>' +
     strefa + "</label></td>" +
     '<td class="liczba" data-liczba="adresy">–</td>' +
-    '<td class="liczba" data-liczba="budynki">–</td>';
+    '<td class="liczba" data-liczba="budynki">–</td>' +
+    '<td class="liczba" data-liczba="dzialki">–</td>';
   wiersz.querySelector("input").addEventListener("change", () => {
     odswiezStrefy(); odswiezLiczby(); odswiezEtykietyBudynkow();
     zdarzenieZbiorcze("filtr-strefy", "Zawężenie strefami");

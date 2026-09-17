@@ -53,7 +53,7 @@ niej kolumny powierzchniowe:
 | `w łącznicach` | punkty adresowe PRG w pasie łącznic — wliczone do `do rozbiórki` |
 | `budynki w łącznicach` | obrysy EGiB tamże — i tak samo dla rodzajów budynków |
 | `łącznice [ha]` | teren łącznic leżący **poza** śladem drogi |
-| `działki w łącznicach` | działki ewidencyjne, których ten pas dotyka |
+| `działki w łącznicach` | działki, które tyka tylko węzeł — wliczone do `działki` i do `zajęte [ha]` |
 
 Odległości 20/30/50/200 m liczą się także od łącznic — patrz sekcja o strefach
 wyżej.
@@ -268,17 +268,22 @@ jest tylko geometria z podstawowymi atrybutami) albo wniosek do GUS o NOBC.
 ### Działki i tereny wrażliwe
 
 Poza adresami i budynkami raport podaje miary dotyczące **samej drogi**, a nie
-tego, co przy niej stoi. Liczone są dla korytarza, czyli śladu razem z pasem
-nad tunelem:
+tego, co przy niej stoi. Działki liczone są od całej drogi — śladu, pasa nad
+tunelem i łącznic węzłów. Miary terenowe (osuwiska, tereny zalewowe, obszary
+chronione) zostają przy samym korytarzu, bez łącznic: tam wynikiem jest
+powierzchnia w hektarach, więc przyjęta szerokość łącznicy wchodziłaby wprost
+do liczby, a nie tylko rozstrzygała o zaliczeniu działki:
 
 | kolumna | co znaczy |
 |---|---|
-| `działki` | ile działek ewidencyjnych przecina korytarz |
-| `zajęte [ha]` | powierzchnia tych działek przypadająca na korytarz |
+| `działki` | ile działek ewidencyjnych przecina droga — ślad, pas nad tunelem i łącznice węzłów |
+| `zajęte [ha]` | powierzchnia tych działek przypadająca na drogę |
 | `działki zabudowane` | z tego takie, na których stoi budynek z EGiB |
 | `działki niezabudowane` | pozostałe — pola, łąki, nieużytki |
-| `działki zajęte >50%` | działki, z których korytarz zabiera ponad połowę |
+| `działki zajęte >50%` | działki, z których droga zabiera ponad połowę |
 | `działki zajęte >90%` | działki zajęte niemal w całości |
+| `działki w śladzie`, `działki nad tunelem`, `działki w łącznicach` | ta sama trójka kategorii, co przy adresach i budynkach; ich suma to `działki` |
+| `działki 0-20 m` … `działki 50-200 m`, `działki ≤20 m` … | działki, które droga omija, ale przechodzi obok — licząc od najbliższego punktu działki |
 | `osuwiska [ha]` | ile korytarza przechodzi przez obszary osuwiskowe |
 | `osuwisko aktywne ciągle [ha]` | z tego osuwiska czynne bez przerwy |
 | `osuwisko aktywne okresowo [ha]` | czynne okresowo |
@@ -294,6 +299,13 @@ problem inżynieryjny niż ustabilizowane. Obszary chronione rozbite są na
 dziesięć kategorii ochrony. Zera też zapisujemy: informacja, że **żaden wariant
 nie tyka parku narodowego, rezerwatu ani obszaru Natura 2000**, jest sama
 w sobie wynikiem i lepiej, żeby wynikała z tabeli niż z niczyjego zapewnienia.
+
+Działki dostały **taką samą siatkę stref jak adresy i budynki**, bo pytanie
+„jak blisko" dotyczy właściciela gruntu tak samo jak mieszkańca domu — z tą
+różnicą, że działka nie ma jednej odległości, tylko kształt, więc liczymy od jej
+najbliższego punktu. Na mapie te liczby stoją w trzeciej kolumnie tabeli stref;
+biorą się wprost z raportu, bo mapa ściąga tylko działki przecinane przez drogę
+— tych w promieniu 200 m są dziesiątki tysięcy.
 
 Sama liczba działek nie mówi jednak, jak dotkliwe jest zajęcie, więc podajemy
 też **udział zajęcia**: działki tracące ponad 50% i ponad 90% powierzchni.
