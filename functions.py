@@ -562,19 +562,23 @@ def miary_terenu(wariant, warstwy):
   # z liczba dzialek przecietych przez zasieg wyzej.
   _dopisz_strefy(wynik, "działki", strefy_dzialek(wariant, warstwy))
 
+  # Tereny wrazliwe liczymy od calej drogi, razem z lacznicami: lacznica nad
+  # osuwiskiem to ten sam problem inzynieryjny, co jezdnia nad osuwiskiem.
+  # Cena jest taka, ze przyjeta szerokosc lacznicy wchodzi tu wprost do
+  # hektarow — ile jej przypada, mowi osobna kolumna "łącznice [ha]".
   for warstwa, kolumna in WARSTWY_TERENU.items():
     obszar = wczytaj_kontekst(warstwa)
     if obszar is None:
       continue
     wynik[kolumna] = round(
-        shapely.area(shapely.intersection(korytarz, obszar)) / 10000, 1)
+        shapely.area(shapely.intersection(zasieg, obszar)) / 10000, 1)
 
     # Rozbicie na rodzaje. Zera tez zapisujemy — informacja, ze zaden wariant
     # nie tyka parku narodowego ani Natury 2000, jest sama w sobie wynikiem.
     if warstwa in WARSTWY_Z_RODZAJAMI:
       for rodzaj, geometria_rodzaju in sorted(rodzaje_kontekstu(warstwa).items()):
         wynik["{} [ha]".format(rodzaj)] = round(
-            shapely.area(shapely.intersection(korytarz, geometria_rodzaju)) / 10000, 1)
+            shapely.area(shapely.intersection(zasieg, geometria_rodzaju)) / 10000, 1)
   return wynik
 
 

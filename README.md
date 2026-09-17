@@ -268,11 +268,10 @@ jest tylko geometria z podstawowymi atrybutami) albo wniosek do GUS o NOBC.
 ### Działki i tereny wrażliwe
 
 Poza adresami i budynkami raport podaje miary dotyczące **samej drogi**, a nie
-tego, co przy niej stoi. Działki liczone są od całej drogi — śladu, pasa nad
-tunelem i łącznic węzłów. Miary terenowe (osuwiska, tereny zalewowe, obszary
-chronione) zostają przy samym korytarzu, bez łącznic: tam wynikiem jest
-powierzchnia w hektarach, więc przyjęta szerokość łącznicy wchodziłaby wprost
-do liczby, a nie tylko rozstrzygała o zaliczeniu działki:
+tego, co przy niej stoi. Liczone są od całej drogi: śladu, pasa nad tunelem
+i łącznic węzłów — łącznica nad osuwiskiem to ten sam problem inżynieryjny, co
+jezdnia nad osuwiskiem. Ceną jest to, że przyjęta szerokość łącznicy wchodzi tu
+wprost do hektarów; ile jej przypada, mówi osobna kolumna `łącznice [ha]`:
 
 | kolumna | co znaczy |
 |---|---|
