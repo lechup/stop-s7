@@ -1308,7 +1308,10 @@ function odswiezDzialki() {
   zbudujWyborDzialek();
 }
 
-function zbudujListe(idListy, pozycje, wybrane, wymiar, nazwaZdarzenia) {
+// Nazwa z przedrostkiem, bo zbudujListe() nalezy juz do filtrow budynkow —
+// deklaracje funkcji sa hoistowane, wiec druga o tej samej nazwie po cichu
+// zastapilaby pierwsza i filtr budynkow przestalby dzialac.
+function zbudujListeDzialek(idListy, pozycje, wybrane, wymiar, nazwaZdarzenia) {
   const lista = document.getElementById(idListy);
   lista.innerHTML = "";
   for (const [klucz, opis] of pozycje) {
@@ -1327,10 +1330,10 @@ function zbudujListe(idListy, pozycje, wybrane, wymiar, nazwaZdarzenia) {
 }
 
 function zbudujWyborDzialek() {
-  zbudujListe("lista-zabudowy", ZABUDOWA, zabudowaWybrana, "zabudowa",
-              "filtr-zabudowa");
-  zbudujListe("lista-zajecia", ZAJECIE, zajecieWybrane, "zajecie",
-              "filtr-zajecie");
+  zbudujListeDzialek("lista-zabudowy", ZABUDOWA, zabudowaWybrana, "zabudowa",
+                     "filtr-zabudowa");
+  zbudujListeDzialek("lista-zajecia", ZAJECIE, zajecieWybrane, "zajecie",
+                     "filtr-zajecie");
 }
 
 async function wczytajDzialki(wariant) {
