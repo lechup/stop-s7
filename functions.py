@@ -770,6 +770,88 @@ def zapisz_liste_dzialek():
     f.write("\n".join(L) + "\n")
 
 
+def warstwy_z_pliku(wariant):
+  """Warstwy korytarza odczytane z zapisanego GPKG (None, gdy pliku nie ma)."""
+  sciezka = "{}/wariant-{}-slad.gpkg".format(KATALOG_WYNIKOW, wariant)
+  if not os.path.exists(sciezka):
+    return None
+  gdf = gpd.read_file(sciezka, layer=WARSTWA_KORYTARZ).to_crs(consts.CRS_METRYCZNY)
+
+  def czesc(rodzaj):
+    wybrane = gdf[gdf["rodzaj"] == rodzaj]
+    return shapely.union_all(wybrane.geometry.values) if len(wybrane) else None
+
+  korytarz = shapely.union_all(gdf.geometry.values)
+  try:
+    pas = gpd.read_file(sciezka, layer=WARSTWA_LACZNIC).to_crs(consts.CRS_METRYCZNY)
+    lacznice = shapely.union_all(pas.geometry.values)
+  except Exception:
+    lacznice = None
+  zasieg = korytarz if lacznice is None else shapely.union_all(
+      [korytarz, lacznice])
+  return {"powierzchnia": czesc("powierzchnia"), "tunel": czesc("tunel"),
+          "korytarz": korytarz, "lacznice": lacznice, "zasieg": zasieg}
+
+
+def przelicz_miary(warianty=None, postep=print):
+  """Przelicza miary z ZAPISANYCH sladow, bez skladania ich od nowa.
+
+  Domkniecie morfologiczne to jakies 90% czasu pelnego przeliczenia, a definicja
+  miary zmienia sie znacznie czesciej niz sam slad — na te sama geometrie
+  patrzymy raz inaczej. Ta sciezka czyta gotowe wariant-X-slad.gpkg i podmienia
+  w podsumowaniu wylacznie kolumny miar; strefy adresow i budynkow zostaja
+  z ostatniego pelnego przebiegu, bo do nich trzeba wczytac 856 tys. adresow.
+
+  Po zmianie sposobu liczenia SLADU (warstwy zrodlowe, promien domkniecia, pas
+  nad tunelem, szerokosc lacznic) trzeba uruchomic pelny raport — ta sciezka
+  policzy wtedy nowe miary na starej geometrii i nikt tego nie zauwazy."""
+  sciezka = "{}/podsumowanie.csv".format(KATALOG_WYNIKOW)
+  if not os.path.exists(sciezka):
+    postep("Brak {} — najpierw policz caly raport: ./uruchom.sh".format(sciezka))
+    return None
+
+  tabela = pd.read_csv(sciezka).set_index("wariant")
+  policzone = 0
+  for wariant in (warianty or consts.VARIANTS):
+    warstwy = warstwy_z_pliku(wariant)
+    if warstwy is None:
+      postep("  pomijam {} — brak zapisanego sladu".format(wariant))
+      continue
+    if wariant not in tabela.index:
+      postep("  pomijam {} — nie ma go w podsumowaniu".format(wariant))
+      continue
+
+    miary = miary_terenu(wariant, warstwy)
+    miary.update(miary_lacznic(wariant, warstwy["korytarz"], warstwy["lacznice"]))
+    for kolumna, wartosc in miary.items():
+      if kolumna not in tabela.columns:
+        tabela[kolumna] = pd.NA
+      tabela.loc[wariant, kolumna] = wartosc
+
+    # Listy dzialek ida z tej samej definicji zajecia, wiec odswiezamy je razem
+    # z liczbami — inaczej dzialki.md mowiloby co innego niz podsumowanie.
+    zajete = zajete_dzialki(wariant, warstwy["zasieg"])
+    if zajete is not None and len(zajete):
+      zajete.drop(columns="geometry").to_csv(
+          "{}/wariant-{}-dzialki.csv".format(KATALOG_WYNIKOW, wariant),
+          index=False)
+    policzone += 1
+    postep("  {}: działki {}, zajęte {} ha, osuwiska {} ha".format(
+        wariant, miary.get("działki"), miary.get("zajęte [ha]"),
+        miary.get("osuwiska [ha]")))
+
+  if not policzone:
+    return None
+  tabela = tabela.reset_index()
+  for kolumna in tabela.columns:
+    if kolumna.startswith(BUDYNKI) or kolumna.startswith("działki"):
+      tabela[kolumna] = tabela[kolumna].astype("Int64")
+  tabela.to_csv(sciezka, index=False)
+  zapisz_liste_dzialek()
+  postep("\nZapisano {0}/podsumowanie.csv i {0}/dzialki.md".format(KATALOG_WYNIKOW))
+  return tabela
+
+
 def generate(warianty=None, zapisz_slad=True, postep=print):
   warianty = warianty or consts.VARIANTS
   os.makedirs(KATALOG_WYNIKOW, exist_ok=True)

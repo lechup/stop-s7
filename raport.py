@@ -36,6 +36,13 @@ parser.add_argument(
          "albo --adres \"Golkowice 116\". Korzysta z zapisanych sladow"
 )
 parser.add_argument(
+    "--tylko-miary",
+    action="store_true",
+    help="Przelicz miary (dzialki, osuwiska, tereny zalewowe, obszary chronione) "
+         "z zapisanych sladow, bez skladania ich od nowa — minuta zamiast "
+         "czterdziestu. Po zmianie sposobu liczenia SLADU uruchom pelny raport"
+)
+parser.add_argument(
     "--bez-sladu",
     action="store_true",
     help="Nie zapisuj plikow GPKG ze sladem drogi"
@@ -50,6 +57,8 @@ if __name__ == "__main__":
         functions.debug()
     elif args.mode == "dane":
         functions.informacje_o_danych()
+    elif args.tylko_miary:
+        functions.przelicz_miary(warianty=args.wariant)
     else:
         functions.generate(
             warianty=args.wariant,

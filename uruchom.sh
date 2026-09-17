@@ -7,7 +7,8 @@
 # nie sam skrypt. Z limitem ginie wylacznie ten proces.
 #
 # Uzycie:  ./uruchom.sh [argumenty raport.py]
-#   ./uruchom.sh --wariant A --metoda dokladna
+#   ./uruchom.sh --wariant A
+#   ./uruchom.sh --tylko-miary        # same miary z zapisanych sladow, ~minuta
 #   LIMIT=8G ./uruchom.sh --mode debug
 
 set -euo pipefail

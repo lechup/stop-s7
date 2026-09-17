@@ -15,12 +15,32 @@ Przykłady:
 
 ```bash
 ./uruchom.sh --wariant A --wariant C   # wybrane warianty
+./uruchom.sh --tylko-miary             # same miary z zapisanych śladów (~minuta)
 ./uruchom.sh --bez-sladu               # bez zapisu GPKG
 ./uruchom.sh --mode debug              # wykaz warstw w plikach wariantów
 ./uruchom.sh --mode dane               # na jakich danych skrypt liczy
 ./uruchom.sh --adres "Osterwy 41P"     # sprawdź pojedynczy adres
 LIMIT=8G ./uruchom.sh                  # podnieś limit pamięci
 ```
+
+### Szybkie przeliczenie miar
+
+Pełne przeliczenie zajmuje **35–40 minut**, z czego zdecydowaną większość
+domknięcie morfologiczne budujące ślad drogi. Definicja miary zmienia się
+jednak dużo częściej niż sam ślad — wtedy patrzymy na tę samą geometrię
+inaczej, a nie liczymy jej od nowa. `--tylko-miary` czyta gotowe
+`raporty/wariant-X-slad.gpkg` i podmienia w podsumowaniu wyłącznie kolumny miar
+(działki, osuwiska, tereny zalewowe, obszary chronione) oraz listy działek:
+**40 sekund zamiast 40 minut**.
+
+Strefy adresów i budynków zostają wtedy z ostatniego pełnego przebiegu — do nich
+trzeba wczytać 856 tys. punktów adresowych. Po zmianie sposobu liczenia **śladu**
+(warstwy źródłowe, promień domknięcia, pas nad tunelem, szerokość łącznic) trzeba
+puścić pełny raport: skrót policzyłby nowe miary na starej geometrii i nikt by
+tego nie zauważył.
+
+Zgodność obu ścieżek da się sprawdzić wprost — po pełnym przebiegu `--tylko-miary`
+musi zostawić `podsumowanie.csv` i `dzialki.md` bajt w bajt takie same.
 
 **Licz przez `uruchom.sh`, nie przez `python raport.py`.** Wrapper uruchamia
 skrypt w cgroupie z twardym `MemoryMax`. Budowanie śladu to operacje na
