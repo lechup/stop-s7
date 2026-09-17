@@ -213,15 +213,24 @@ def warstwa_dzialek(wariant, korytarz, postep=print):
     trafienia = budynki.sindex.query(trafione.geometry.values, predicate="intersects")
     z_budynkiem = set(trafienia[0].tolist())
 
+  # Udzial zajecia idzie na mape, bo to on decyduje, czy wlascicielowi zostaje
+  # dzialka do uzytku, czy resztowka — a bez niego nie da sie po tym filtrowac.
+  zajete = shapely.area(shapely.intersection(trafione.geometry.values, korytarz))
+
   dane = json.loads(trafione.to_crs(4326).to_json(drop_id=True))
   for i, (obiekt, (_, rekord)) in enumerate(zip(dane["features"], trafione.iterrows())):
     obiekt["geometry"]["coordinates"] = zaokraglij(obiekt["geometry"]["coordinates"])
+    pole = float(rekord.get("pow_m2") or 0)
     obiekt["properties"] = {
         "warstwa": "dzialki",
         "teryt": rekord.get("teryt") or "",
         "obreb": rekord.get("obreb") or "",
         "nr": rekord.get("nr_dzialki") or "",
         "zab": 1 if i in z_budynkiem else 0,
+        # Jedno miejsce po przecinku, bo progi raportu (>50%, >90%) liczone sa
+        # tak samo — przy zaokragleniu do calosci dzialka zajeta w 90,4%
+        # wypadalaby na mapie z kategorii "ponad 90%", a w CSV by w niej byla.
+        "ud": round(100 * zajete[i] / pole, 1) if pole else 0.0,
     }
   postep("    {:<18} {:>5} obiektow".format("dzialki", len(dane["features"])))
   return dane["features"]

@@ -247,6 +247,13 @@
         <summary id="podsumowanie-zabudowy">zabudowa: wszystkie</summary>
         <div class="lista" id="lista-zabudowy"></div>
       </details>
+      <details class="rodzaje">
+        <summary id="podsumowanie-zajecia">zajęcie: wszystkie</summary>
+        <div class="lista" id="lista-zajecia"></div>
+        <p class="uwaga">Progi te same, co w raporcie. Między nimi leży
+        przypadek najgorszy dla właściciela: resztówka — kawałek zbyt mały
+        albo źle ukształtowany, żeby dało się go dalej używać.</p>
+      </details>
       <p class="uwaga">Działki przecięte przez drogę — ślad, pas nad tunelem albo
       łącznicę węzła. Wywłaszczenie części działki dotyka właściciela także wtedy,
       gdy nic na niej nie stoi, a niezabudowanych jest tu około 80%. Wyszukiwarka
@@ -835,9 +842,11 @@ function stylObiektu(obiekt) {
   if (p.warstwa === "dzialki") {
     const opis = [p.nr ? "dz. " + p.nr : "", p.obreb ? "obręb " + p.obreb : ""]
       .filter(Boolean).join(", ");
+    const udzial = Number(p.ud) || 0;
     return "<strong>" + (opis || "Działka ewidencyjna") + "</strong><br>" +
-      (p.zab ? "zabudowana" : "niezabudowana") +
-      '<br><span class="uwaga">przecięta przez drogę wariantu ' + wariantAktywny +
+      (p.zab ? "zabudowana" : "niezabudowana") + ", zajęta w " +
+      (udzial < 1 ? "mniej niż 1" : udzial) + "%" +
+      '<br><span class="uwaga">przez drogę wariantu ' + wariantAktywny +
       " — ślad, pas nad tunelem albo łącznicę węzła</span>";
   }
   if (BARWY_TERENU[p.warstwa]) {
@@ -907,9 +916,8 @@ async function pokazWariant(wariant) {
   // clearLayers usunelo podgrupy rodzajow razem z zawartoscia — zerujemy indeks.
   Object.keys(grupyBudynkow).forEach(k => delete grupyBudynkow[k]);
   Object.keys(dzialkiWczytane).forEach(k => delete dzialkiWczytane[k]);
-  Object.keys(grupyZabudowy).forEach(k => delete grupyZabudowy[k]);
-  licznikZabudowy["1"] = 0;
-  licznikZabudowy["0"] = 0;
+  Object.keys(grupyDzialek).forEach(k => delete grupyDzialek[k]);
+  Object.keys(licznikDzialek).forEach(k => delete licznikDzialek[k]);
   const polaDzialek = document.querySelector('[data-warstwa="dzialki"]');
   if (polaDzialek && polaDzialek.checked) wczytajDzialki(wariant);
   else document.getElementById("licznik-dzialek").textContent = "";
@@ -1237,46 +1245,92 @@ for (const [id, ktory, wszystkie] of [
 // Dzialki wazą tyle co reszta wariantu razem wzieta, a do pytania "czy moj dom
 // jest zajety" nie sa potrzebne — wczytujemy je dopiero, gdy ktos je wlaczy.
 const dzialkiWczytane = {};
-// Dzialki dzielimy na zabudowane i niezabudowane — wywlaszczenie dzialki z domem
-// to co innego niz pola, choc jedno i drugie boli wlasciciela.
+// Dzialki filtrujemy w dwoch wymiarach naraz, tak jak budynki: zabudowa mowi,
+// czy ktos tam mieszka, a udzial zajecia — czy wlascicielowi cokolwiek zostaje.
+// Progi te same, co w raporcie (>50% i >90%), zeby liczby na mapie i w CSV
+// dalo sie zestawiac wprost.
 const ZABUDOWA = [["1", "zabudowane"], ["0", "niezabudowane"]];
-const grupyZabudowy = {};   // "1"/"0" -> L.LayerGroup
+const ZAJECIE = [["90", "ponad 90% — praktycznie cała"],
+                 ["50", "50–90% — resztówka"],
+                 ["0", "do 50%"]];
+const grupyDzialek = {};    // "zab|prog" -> L.LayerGroup
 const zabudowaWybrana = new Set(["1", "0"]);
-const licznikZabudowy = { "1": 0, "0": 0 };
+const zajecieWybrane = new Set(["90", "50", "0"]);
+const licznikDzialek = {};  // "zab|prog" -> ile
 
-function odswiezZabudowe() {
-  for (const [klucz, grupa] of Object.entries(grupyZabudowy)) {
-    if (zabudowaWybrana.has(klucz)) podgrupy.dzialki[BEZ_STREFY].addLayer(grupa);
-    else podgrupy.dzialki[BEZ_STREFY].removeLayer(grupa);
-  }
-  const widoczne = [...zabudowaWybrana].reduce(
-    (a, k) => a + (licznikZabudowy[k] || 0), 0);
-  const opis = zabudowaWybrana.size === 2 ? "wszystkie"
-    : (zabudowaWybrana.size === 0 ? "żadne"
-       : ZABUDOWA.find(([k]) => zabudowaWybrana.has(k))[1]);
-  document.getElementById("podsumowanie-zabudowy").textContent =
-    "zabudowa: " + opis + " (" + widoczne.toLocaleString("pl-PL") + ")";
-  document.getElementById("licznik-dzialek").textContent =
-    " — " + widoczne.toLocaleString("pl-PL");
+function progZajecia(udzial) {
+  const u = Number(udzial) || 0;
+  if (u > 90) return "90";
+  if (u > 50) return "50";
+  return "0";
 }
 
-function zbudujWyborZabudowy() {
-  const lista = document.getElementById("lista-zabudowy");
+function kluczDzialki(p) {
+  return String(p.zab ?? 0) + "|" + progZajecia(p.ud);
+}
+
+function dzialkaWidoczna(klucz) {
+  const [zab, prog] = klucz.split("|");
+  return zabudowaWybrana.has(zab) && zajecieWybrane.has(prog);
+}
+
+// Liczba dzialek w jednej wartosci wymiaru, przy uwzglednieniu drugiego —
+// inaczej "zabudowane (335)" klamaloby po zawezeniu udzialu zajecia.
+function policzDzialki(wymiar, wartosc) {
+  let suma = 0;
+  for (const [klucz, ile] of Object.entries(licznikDzialek)) {
+    const [zab, prog] = klucz.split("|");
+    if (wymiar === "zabudowa" && zab === wartosc && zajecieWybrane.has(prog)) suma += ile;
+    if (wymiar === "zajecie" && prog === wartosc && zabudowaWybrana.has(zab)) suma += ile;
+  }
+  return suma;
+}
+
+function odswiezDzialki() {
+  for (const [klucz, grupa] of Object.entries(grupyDzialek)) {
+    if (dzialkaWidoczna(klucz)) podgrupy.dzialki[BEZ_STREFY].addLayer(grupa);
+    else podgrupy.dzialki[BEZ_STREFY].removeLayer(grupa);
+  }
+  const widoczne = Object.entries(licznikDzialek).reduce(
+    (a, [klucz, ile]) => a + (dzialkaWidoczna(klucz) ? ile : 0), 0);
+
+  const podsumuj = (wymiar, wybrane, wszystkie, etykieta) => {
+    const opis = wybrane.size === wszystkie.length ? "wszystkie"
+      : (wybrane.size === 0 ? "żadne"
+         : wszystkie.filter(([k]) => wybrane.has(k)).map(([, o]) => o).join(", "));
+    document.getElementById("podsumowanie-" + etykieta).textContent =
+      etykieta === "zabudowy" ? "zabudowa: " + opis : "zajęcie: " + opis;
+  };
+  podsumuj("zabudowa", zabudowaWybrana, ZABUDOWA, "zabudowy");
+  podsumuj("zajecie", zajecieWybrane, ZAJECIE, "zajecia");
+  document.getElementById("licznik-dzialek").textContent =
+    " — " + widoczne.toLocaleString("pl-PL");
+  zbudujWyborDzialek();
+}
+
+function zbudujListe(idListy, pozycje, wybrane, wymiar, nazwaZdarzenia) {
+  const lista = document.getElementById(idListy);
   lista.innerHTML = "";
-  for (const [klucz, opis] of ZABUDOWA) {
+  for (const [klucz, opis] of pozycje) {
     const etykieta = document.createElement("label");
-    etykieta.innerHTML = '<input type="checkbox" data-zabudowa="' + klucz + '"' +
-      (zabudowaWybrana.has(klucz) ? " checked" : "") + "><span>" + opis +
-      " (" + (licznikZabudowy[klucz] || 0).toLocaleString("pl-PL") + ")</span>";
+    etykieta.innerHTML = '<input type="checkbox" data-' + wymiar + '="' + klucz + '"' +
+      (wybrane.has(klucz) ? " checked" : "") + "><span>" + opis +
+      " (" + policzDzialki(wymiar, klucz).toLocaleString("pl-PL") + ")</span>";
     etykieta.querySelector("input").addEventListener("change", (zdarz) => {
-      if (zdarz.target.checked) zabudowaWybrana.add(klucz);
-      else zabudowaWybrana.delete(klucz);
-      odswiezZabudowe();
-      zdarzenieZbiorcze("filtr-zabudowa", "Zawężenie zabudową działek");
+      if (zdarz.target.checked) wybrane.add(klucz);
+      else wybrane.delete(klucz);
+      odswiezDzialki();
+      zdarzenieZbiorcze(nazwaZdarzenia, "Zawężenie działek");
     });
     lista.appendChild(etykieta);
   }
-  odswiezZabudowe();
+}
+
+function zbudujWyborDzialek() {
+  zbudujListe("lista-zabudowy", ZABUDOWA, zabudowaWybrana, "zabudowa",
+              "filtr-zabudowa");
+  zbudujListe("lista-zajecia", ZAJECIE, zajecieWybrane, "zajecie",
+              "filtr-zajecie");
 }
 
 async function wczytajDzialki(wariant) {
@@ -1292,17 +1346,17 @@ async function wczytajDzialki(wariant) {
       style: stylObiektu,
       onEachFeature: (obiekt, warstwa) => {
         warstwa.bindPopup(opisObiektu(obiekt.properties));
-        const klucz = String(obiekt.properties.zab ?? 0);
-        if (!grupyZabudowy[klucz]) {
-          grupyZabudowy[klucz] =
+        const klucz = kluczDzialki(obiekt.properties);
+        if (!grupyDzialek[klucz]) {
+          grupyDzialek[klucz] =
             L.layerGroup().addTo(podgrupy.dzialki[BEZ_STREFY]);
         }
-        grupyZabudowy[klucz].addLayer(warstwa);
-        licznikZabudowy[klucz] = (licznikZabudowy[klucz] || 0) + 1;
+        grupyDzialek[klucz].addLayer(warstwa);
+        licznikDzialek[klucz] = (licznikDzialek[klucz] || 0) + 1;
       },
     });
     licznik.textContent = " — " + dane.features.length.toLocaleString("pl-PL");
-    zbudujWyborZabudowy();
+    odswiezDzialki();
   } catch (blad) {
     dzialkiWczytane[wariant] = false;
     licznik.textContent = " — nie udało się wczytać";

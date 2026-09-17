@@ -442,8 +442,13 @@ jednocześnie na mapę i na statystyki: można obejrzeć same domy mieszkalne,
 albo mieszkalne razem z oświatą i opieką zdrowotną. Wybór przeżywa zmianę
 wariantu.
 
-Warstwa działek na mapie dzieli się na **zabudowane i niezabudowane** — osobny
-filtr, jak przy rodzajach budynków. Rozróżnienie jest istotne, a proporcja
+Warstwa działek na mapie ma **dwa filtry naraz**, jak budynki. Pierwszy dzieli
+je na **zabudowane i niezabudowane**, drugi na **udział zajęcia**: ponad 90%
+(praktycznie cała), 50–90% (resztówka) i do 50%. Progi są te same, co
+w podsumowaniu, więc liczby na mapie i w CSV zestawia się wprost — sprawdzane
+jest to automatycznie po każdym eksporcie. Liczby przy filtrach uwzględniają
+drugi wymiar, więc po zawężeniu do działek zabudowanych widać, ile z nich traci
+ponad 90% powierzchni (w wariancie A: 42 z 326). Rozróżnienie jest istotne, a proporcja
 zaskakuje: spośród działek przecinanych przez korytarz zabudowanych jest tylko
 około **20%** (np. w wariancie A 300 z 1534). Reszta to pola, łąki i nieużytki,
 których właściciele nie pojawią się w żadnej statystyce budynków ani adresów.
