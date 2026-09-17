@@ -485,7 +485,31 @@ def strefy_dzialek(wariant, warstwy):
       strefy.append(W_LACZNICACH)
     else:
       strefy.append(_strefa(odleglosc) or _pierwsza_strefa())
-  return pd.Series(strefy)
+  # Indeks dzialek, a nie kolejne liczby: tej samej Serii uzywa eksport warstwy
+  # na mape, wiec mapa i raport dziela jedna definicje strefy.
+  return pd.Series(strefy, index=pary.index)
+
+
+def dzialki_ze_strefami(wariant, warstwy):
+  """Dzialki w zasiegu 200 m z kolumnami strefa, odleglosc_m i udzial_proc."""
+  dzialki = wczytaj_dzialki(wariant)
+  if dzialki is None or dzialki.empty:
+    return None
+  strefy = strefy_dzialek(wariant, warstwy)
+  if strefy.empty:
+    return None
+
+  wybrane = dzialki.loc[strefy.index].copy()
+  wybrane["strefa"] = strefy
+  zasieg = warstwy.get("zasieg")
+  if zasieg is None:
+    zasieg = warstwy["korytarz"]
+  wybrane["odleglosc_m"] = shapely.distance(wybrane.geometry.values, zasieg).round(1)
+  pola = wybrane["pow_m2"].astype(float)
+  zajete = shapely.area(shapely.intersection(wybrane.geometry.values, zasieg))
+  wybrane["udzial_proc"] = [round(100 * z / p, 1) if p else 0.0
+                            for z, p in zip(zajete, pola)]
+  return wybrane
 
 
 def zajete_dzialki(wariant, korytarz):

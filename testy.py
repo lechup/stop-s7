@@ -204,20 +204,77 @@ def test_progi_zajecia_zgodne_z_raportem():
 
 
 def test_liczba_dzialek_w_warstwie():
-  """Warstwa na mapie ma tyle dzialek, ile raport liczy jako zajete."""
+  """Warstwa siega 200 m od drogi, tak jak adresy i budynki.
+
+  Gdyby zawierala same dzialki przeciete przez droge, przelaczniki stref
+  20/30/50/200 m nie mialyby czego pokazac i nie zmienialyby na mapie nic."""
   raport = wiersze_podsumowania()
   for wariant in warianty_z_danymi():
     warstwa = dane_json("wariant-{}-dzialki.geojson".format(wariant))
-    assert len(warstwa["features"]) == int(raport[wariant]["działki"]), (
-        "wariant {}: warstwa {} dzialek, raport {}".format(
-            wariant, len(warstwa["features"]), raport[wariant]["działki"]))
+    assert len(warstwa["features"]) == int(raport[wariant]["działki ≤200 m"]), (
+        "wariant {}: warstwa {} dzialek, raport {} w 200 m".format(
+            wariant, len(warstwa["features"]), raport[wariant]["działki ≤200 m"]))
+
+
+def test_strefy_dzialek_w_warstwie():
+  """Kazda strefa ma na mapie tyle dzialek, ile mowi raport."""
+  raport = wiersze_podsumowania()
+  strefy = ["w śladzie", "nad tunelem", "w łącznicach",
+            "0-20 m", "20-30 m", "30-50 m", "50-200 m"]
+  for wariant in warianty_z_danymi():
+    warstwa = dane_json("wariant-{}-dzialki.geojson".format(wariant))
+    policzone = {}
+    for obiekt in warstwa["features"]:
+      strefa = obiekt["properties"]["strefa"]
+      policzone[strefa] = policzone.get(strefa, 0) + 1
+    assert set(policzone) <= set(strefy), "nieznana strefa: {}".format(
+        set(policzone) - set(strefy))
+    for strefa in strefy:
+      kolumna = "działki {}".format(strefa)
+      assert policzone.get(strefa, 0) == int(raport[wariant][kolumna]), (
+          "wariant {}, strefa {}: mapa {}, raport {}".format(
+              wariant, strefa, policzone.get(strefa, 0), raport[wariant][kolumna]))
+
+
+def test_dzialki_maja_komplet_opisu():
+  """Popup ma z czego zbudowac odpowiedz: identyfikator, obreb, strefa, odleglosc.
+
+  Do tego udzial zajecia i odleglosc musza sie zgadzac: dzialka zajeta lezy
+  w zerowej odleglosci, a ta poza zajeciem ma udzial rowny zeru."""
+  przy_drodze = {"w śladzie", "nad tunelem", "w łącznicach"}
+  for wariant in warianty_z_danymi():
+    warstwa = dane_json("wariant-{}-dzialki.geojson".format(wariant))
+    for obiekt in warstwa["features"]:
+      p = obiekt["properties"]
+      for pole in ("teryt", "obreb", "nr", "strefa", "odl", "ud"):
+        assert pole in p, "brak pola {} w dzialce {}".format(pole, p.get("teryt"))
+      assert p["teryt"], "dzialka bez identyfikatora TERYT"
+      if p["strefa"] in przy_drodze:
+        assert p["odl"] == 0, "{}: strefa {}, a odleglosc {}".format(
+            p["teryt"], p["strefa"], p["odl"])
+        # Udzialu NIE wymagamy dodatniego: dzialka moze musnac slad rogiem
+        # i miec zajecie ponizej 0,05%, ktore zaokragla sie do zera. Raport
+        # liczy ja tak samo (przecina = zajeta), wiec to nie jest niespojnosc.
+        assert p["ud"] >= 0, "{}: ujemny udzial zajecia".format(p["teryt"])
+      else:
+        assert p["ud"] == 0, "{}: strefa {}, a udzial zajecia {}".format(
+            p["teryt"], p["strefa"], p["ud"])
+        # Odleglosc musi pasowac do nazwy strefy. Granice bierzemy domkniete
+        # z obu stron, bo odleglosc idzie zaokraglona do decymetra — dzialka
+        # 4 cm od drogi ma w danych 0,0 m, a nadal nalezy do strefy 0-20 m.
+        od, do = (int(x) for x in p["strefa"].split(" ")[0].split("-"))
+        assert od <= p["odl"] <= do, "{}: strefa {}, a odleglosc {} m".format(
+            p["teryt"], p["strefa"], p["odl"])
 
 
 def test_dzialki_zabudowane_zgodne_z_raportem():
   raport = wiersze_podsumowania()
   for wariant in warianty_z_danymi():
     warstwa = dane_json("wariant-{}-dzialki.geojson".format(wariant))
-    zabudowane = sum(1 for o in warstwa["features"] if o["properties"]["zab"])
+    przy_drodze = {"w śladzie", "nad tunelem", "w łącznicach"}
+    zabudowane = sum(1 for o in warstwa["features"]
+                     if o["properties"]["zab"]
+                     and o["properties"]["strefa"] in przy_drodze)
     assert zabudowane == int(raport[wariant]["działki zabudowane"]), (
         "wariant {}: mapa {} zabudowanych, raport {}".format(
             wariant, zabudowane, raport[wariant]["działki zabudowane"]))
@@ -381,14 +438,72 @@ setTimeout(() => {
   }, 1200);
 }, 8000);""", sekundy=40)
   liczba = lambda tekst: int(re.sub(r"[^\d]", "", tekst) or 0)
-  assert liczba(wynik["wszystkie"]) == int(raport["A"]["działki"]), (
-      "mapa pokazuje {} dzialek, raport {}".format(
-          wynik["wszystkie"], raport["A"]["działki"]))
+  assert liczba(wynik["wszystkie"]) == int(raport["A"]["działki ≤200 m"]), (
+      "mapa pokazuje {} dzialek, raport {} w 200 m".format(
+          wynik["wszystkie"], raport["A"]["działki ≤200 m"]))
   assert liczba(wynik["ponad90"]) == int(raport["A"]["działki zajęte >90%"]), (
       "po zawezeniu do >90% mapa ma {}, raport {}".format(
           wynik["ponad90"], raport["A"]["działki zajęte >90%"]))
   assert 0 < liczba(wynik["ponad90zabudowane"]) < liczba(wynik["ponad90"]), (
       "dolozenie filtra zabudowy nic nie zmienilo")
+
+
+def test_przegladarka_strefy_dzialek():
+  """Odklikanie strefy musi zmieniac liczbe dzialek na mapie.
+
+  Tak sie kiedys nie dzialo: warstwa miala wylacznie dzialki przeciete przez
+  droge, wiec strefy 20/30/50/200 m nie mialy czego pokazac, a odklikanie
+  "w śladzie" nie zmienialo niczego widocznego."""
+  raport = wiersze_podsumowania()
+  wynik = _w_przegladarce("""
+setTimeout(() => { dok().querySelector('[data-warstwa="dzialki"]').click(); }, 3000);
+setTimeout(() => {
+  const wszystkie = dok().getElementById("licznik-dzialek").textContent;
+  dok().querySelector('[data-strefa="50-200 m"]').click();
+  setTimeout(() => {
+    const bez50_200 = dok().getElementById("licznik-dzialek").textContent;
+    dok().querySelectorAll("[data-strefa]").forEach((p, i) => {
+      if (i > 0 && p.checked) p.click();
+    });
+    setTimeout(() => zglos({
+      wszystkie: wszystkie,
+      bez50_200: bez50_200,
+      samSlad: dok().getElementById("licznik-dzialek").textContent,
+      wStrefieTabela: dok().querySelector('[data-wiersz="50-200 m"] [data-liczba="dzialki"]').textContent,
+    }), 1200);
+  }, 1200);
+}, 9000);""", sekundy=45)
+  liczba = lambda tekst: int(re.sub(r"[^\d]", "", tekst) or 0)
+  assert liczba(wynik["wszystkie"]) == int(raport["A"]["działki ≤200 m"]), (
+      "mapa pokazuje {} dzialek, raport {} w 200 m".format(
+          wynik["wszystkie"], raport["A"]["działki ≤200 m"]))
+  assert liczba(wynik["bez50_200"]) == (
+      int(raport["A"]["działki ≤200 m"]) - int(raport["A"]["działki 50-200 m"])), (
+      "po odkliknieciu strefy 50-200 m zostalo {}".format(wynik["bez50_200"]))
+  assert liczba(wynik["samSlad"]) == int(raport["A"]["działki w śladzie"]), (
+      "przy samej strefie 'w śladzie' mapa ma {}, raport {}".format(
+          wynik["samSlad"], raport["A"]["działki w śladzie"]))
+
+
+def test_przegladarka_opis_dzialki():
+  """Popup dzialki musi podawac identyfikator, obreb i los dzialki."""
+  wynik = _w_przegladarce("""
+setTimeout(() => zglos({
+  zajeta: okno().opisObiektu({ warstwa: "dzialki", teryt: "120903_4.0002.370",
+    obreb: "Myślenice 2", nr: "370", gmina: "Myślenice", pow: 9183, zab: 1,
+    strefa: "w śladzie", odl: 0, ud: 7.4 }),
+  daleka: okno().opisObiektu({ warstwa: "dzialki", teryt: "120903_4.0002.371",
+    obreb: "Myślenice 2", nr: "371", gmina: "Myślenice", pow: 500, zab: 0,
+    strefa: "30-50 m", odl: 42.3, ud: 0 }),
+}), 5000);""")
+  for czego_szukam in ("120903_4.0002.370", "Myślenice 2", "dz. 370",
+                       "zajęta w 7,4%", "zabudowana"):
+    assert czego_szukam in wynik["zajeta"], (
+        "w opisie zajętej brakuje {} — opis brzmi: {}".format(
+            czego_szukam, wynik["zajeta"]))
+  assert "42 m od drogi" in wynik["daleka"], (
+      "opis dalekiej dzialki nie podaje odleglosci: {}".format(wynik["daleka"]))
+  assert "30-50 m" in wynik["daleka"], "opis dalekiej dzialki nie podaje strefy"
 
 
 def test_przegladarka_tabela_stref():

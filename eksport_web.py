@@ -193,44 +193,58 @@ def warstwy_kontekstowe(korytarz, postep=print):
   return obiekty
 
 
-def warstwa_dzialek(wariant, korytarz, postep=print):
-  """Dzialki ewidencyjne przecinane przez droge — slad razem z lacznicami."""
+# Dzialki dalej niz slad upraszczamy: granica ewidencyjna ma czasem kilkaset
+# wierzcholkow, a przy skali mapy metr roznicy jest niewidoczny. Bez tego
+# warstwa ze strefami wazylaby dwa razy tyle.
+UPROSZCZENIE_DZIALEK = 1.0
+
+
+def warstwa_dzialek(wariant, warstwy, postep=print):
+  """Dzialki w zasiegu 200 m od drogi, ze strefa, udzialem zajecia i odlegloscia.
+
+  Zasieg jest szerszy niz samo przeciecie, zeby przelaczniki stref dzialaly
+  na dzialki tak samo jak na adresy i budynki — wczesniej warstwa miala
+  wylacznie dzialki przeciete przez droge i odklikanie strefy "0-20 m" nie
+  zmienialo na mapie nic."""
   import geopandas as gpd
-  try:
-    gdf = gpd.read_file("warianty/wariant-{}.gpkg".format(wariant), layer="dzialki")
-  except Exception:
+  wybrane = functions.dzialki_ze_strefami(wariant, warstwy)
+  if wybrane is None or wybrane.empty:
     return []
-  gdf = gdf.to_crs(consts.CRS_METRYCZNY)
-  gdf["geometry"] = shapely.make_valid(gdf.geometry.values)
-  trafione = gdf.iloc[sorted(set(gdf.sindex.query(korytarz, predicate="intersects")))]
-  if trafione.empty:
-    return []
+
   # Zabudowana czy nie — z obrysow EGiB. Rozroznienie jest istotne: wywlaszczenie
   # dzialki z domem to co innego niz pola, choc jedno i drugie boli wlasciciela.
   budynki = functions.wczytaj_budynki()
   z_budynkiem = set()
   if budynki is not None and len(budynki):
-    trafienia = budynki.sindex.query(trafione.geometry.values, predicate="intersects")
+    trafienia = budynki.sindex.query(wybrane.geometry.values, predicate="intersects")
     z_budynkiem = set(trafienia[0].tolist())
 
-  # Udzial zajecia idzie na mape, bo to on decyduje, czy wlascicielowi zostaje
-  # dzialka do uzytku, czy resztowka — a bez niego nie da sie po tym filtrowac.
-  zajete = shapely.area(shapely.intersection(trafione.geometry.values, korytarz))
+  uproszczone = wybrane.copy()
+  uproszczone["geometry"] = shapely.simplify(
+      wybrane.geometry.values, UPROSZCZENIE_DZIALEK)
+  # Upraszczanie potrafi zepsuc wielobok — wtedy zostawiamy oryginal.
+  uproszczone["geometry"] = [
+      u if shapely.is_valid(u) and not shapely.is_empty(u) else o
+      for u, o in zip(uproszczone.geometry.values, wybrane.geometry.values)]
 
-  dane = json.loads(trafione.to_crs(4326).to_json(drop_id=True))
-  for i, (obiekt, (_, rekord)) in enumerate(zip(dane["features"], trafione.iterrows())):
+  dane = json.loads(uproszczone.to_crs(4326).to_json(drop_id=True))
+  for i, (obiekt, (_, rekord)) in enumerate(zip(dane["features"],
+                                                wybrane.iterrows())):
     obiekt["geometry"]["coordinates"] = zaokraglij(obiekt["geometry"]["coordinates"])
-    pole = float(rekord.get("pow_m2") or 0)
     obiekt["properties"] = {
         "warstwa": "dzialki",
         "teryt": rekord.get("teryt") or "",
         "obreb": rekord.get("obreb") or "",
         "nr": rekord.get("nr_dzialki") or "",
+        "gmina": rekord.get("gmina") or "",
+        "pow": round(float(rekord.get("pow_m2") or 0)),
         "zab": 1 if i in z_budynkiem else 0,
+        "strefa": rekord["strefa"],
+        "odl": float(rekord["odleglosc_m"]),
         # Jedno miejsce po przecinku, bo progi raportu (>50%, >90%) liczone sa
         # tak samo — przy zaokragleniu do calosci dzialka zajeta w 90,4%
         # wypadalaby na mapie z kategorii "ponad 90%", a w CSV by w niej byla.
-        "ud": round(100 * zajete[i] / pole, 1) if pole else 0.0,
+        "ud": float(rekord["udzial_proc"]),
     }
   postep("    {:<18} {:>5} obiektow".format("dzialki", len(dane["features"])))
   return dane["features"]
@@ -471,7 +485,7 @@ if __name__ == "__main__":
     # Dzialki osobno i wczytywane leniwie: sa najwieksza warstwa, a do pytania
     # "czy moj dom jest zajety" niepotrzebne. Trzymanie ich w glownym pliku
     # podnosilo wejscie na strone z ~200 kB do ~460 kB.
-    dzialki = warstwa_dzialek(wariant, korytarz)
+    dzialki = warstwa_dzialek(wariant, functions.warstwy_z_pliku(wariant))
     if dzialki:
       rozmiar += zapisz_json(
           "{}/wariant-{}-dzialki.geojson".format(KATALOG, wariant),

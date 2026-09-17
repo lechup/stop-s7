@@ -473,7 +473,18 @@ jednocześnie na mapę i na statystyki: można obejrzeć same domy mieszkalne,
 albo mieszkalne razem z oświatą i opieką zdrowotną. Wybór przeżywa zmianę
 wariantu.
 
-Warstwa działek na mapie ma **dwa filtry naraz**, jak budynki. Pierwszy dzieli
+Warstwa działek na mapie sięga **200 m od drogi** i dzieli się na te same
+strefy co adresy i budynki, więc przełączniki stref działają na nią tak samo —
+wcześniej miała wyłącznie działki przecięte przez drogę i odklikanie „0-20 m"
+nie zmieniało nic. Barwa mówi, czy działkę droga zabiera, czy tylko przechodzi
+obok; kliknięcie podaje identyfikator TERYT, obręb, gminę, powierzchnię oraz
+udział zajęcia albo odległość od drogi.
+
+Granice są upraszczane o 1 m przed zapisem — przy skali mapy to niewidoczne,
+a bez tego warstwa ze strefami ważyłaby dwa razy tyle (541 kB po gzipie zamiast
+ponad megabajta).
+
+Poza tym warstwa ma **dwa filtry naraz**, jak budynki. Pierwszy dzieli
 je na **zabudowane i niezabudowane**, drugi na **udział zajęcia**: ponad 90%
 (praktycznie cała), 50–90% (resztówka) i do 50%. Progi są te same, co
 w podsumowaniu, więc liczby na mapie i w CSV zestawia się wprost — sprawdzane
@@ -559,7 +570,7 @@ Dane generuje [eksport_web.py](eksport_web.py):
 | plik | zawartość | po gzipie |
 |---|---|---|
 | `docs/dane/wariant-X.geojson` | korytarz, budynki, adresy i warstwy terenowe jednego wariantu | 194–299 kB |
-| `docs/dane/wariant-X-dzialki.geojson` | działki przecinające korytarz, wczytywane leniwie | 137–262 kB |
+| `docs/dane/wariant-X-dzialki.geojson` | działki do 200 m od drogi ze strefą, wczytywane leniwie | 460–560 kB |
 | `docs/dane/dzialki-index.json` | 31 565 działek: procent zajęcia albo odległość, z kilometrażem | 645 kB |
 | `docs/dane/miary.json` | miary terenowe do panelu, czytane z `podsumowanie.csv` | 2 kB |
 | `docs/dane/adresy-index.json` | 13 924 adresy z odległością do każdego wariantu, z kilometrażem | 395 kB |

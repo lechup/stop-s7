@@ -254,10 +254,12 @@
         przypadek najgorszy dla właściciela: resztówka — kawałek zbyt mały
         albo źle ukształtowany, żeby dało się go dalej używać.</p>
       </details>
-      <p class="uwaga">Działki przecięte przez drogę — ślad, pas nad tunelem albo
-      łącznicę węzła. Wywłaszczenie części działki dotyka właściciela także wtedy,
-      gdy nic na niej nie stoi, a niezabudowanych jest tu około 80%. Wyszukiwarka
-      wyżej podaje dla każdego wariantu procent zajęcia albo odległość.</p>
+      <p class="uwaga">Działki do 200 m od drogi, w tych samych strefach co
+      adresy i budynki — barwa mówi, czy działkę droga zabiera, czy tylko
+      przechodzi obok. Wywłaszczenie części działki dotyka właściciela także
+      wtedy, gdy nic na niej nie stoi, a niezabudowanych jest wśród zajętych
+      około 80%. Kliknięcie podaje identyfikator TERYT, obręb i to, ile z niej
+      ubywa; wyszukiwarka wyżej — to samo dla każdego wariantu naraz.</p>
       <label class="przelacznik"><input type="checkbox" data-warstwa="osuwiska"> osuwiska</label>
       <label class="przelacznik"><input type="checkbox" data-warstwa="ruchy_masowe"> obszary zagrożone ruchami mas</label>
       <label class="przelacznik"><input type="checkbox" data-warstwa="powodz"> tereny zalewowe</label>
@@ -287,10 +289,9 @@
       <p class="info" style="margin-top:6px">
         <a href="#" id="tylko-slad">przy drodze</a> ·
         <a href="#" id="wszystkie-strefy">wszystkie</a></p>
-      <p class="uwaga">Adresy i budynki liczone są z tego, co widać na mapie,
-      więc idą za filtrami rodzaju i kondygnacji. Działki pochodzą wprost
-      z raportu — mapa ściąga tylko te przecinane przez drogę, bo dalszych
-      byłyby dziesiątki tysięcy.</p>
+      <p class="uwaga">Liczby pokazują to, co widać na mapie, więc idą za
+      filtrami. Działki doczytują się dopiero po włączeniu warstwy — do tego
+      czasu w kolumnie stoją wartości z raportu.</p>
     </div>
 
     <div class="sekcja">
@@ -729,9 +730,11 @@ function odswiezMiary() {
 // lacznie. Bez tego trzeba je zgadywac z mapy.
 function odswiezLiczby() {
   let sumaA = 0, sumaB = 0, sumaD = 0;
-  // Dzialki w strefach biora sie z raportu, nie z wczytanych warstw — mapa ma
-  // tylko te przecinane przez droge, a strefy 20-200 m obejmuja ich dziesiatki
-  // tysiecy. Brak pliku miar nie moze wysypac tabeli, stad pusty obiekt.
+  // Dzialki liczymy z wczytanej warstwy, dokladnie jak adresy i budynki —
+  // dzieki temu ida za filtrami zabudowy i udzialu zajecia. Dopoki warstwa nie
+  // zostala wlaczona, pokazujemy liczby z raportu, zeby tabela nie klamala
+  // zerami; brak pliku miar tez nie moze jej wysypac, stad pusty obiekt.
+  const zWarstwy = dzialkiWczytane[wariantAktywny] === true;
   const dzialkiStref = (miary && miary.dzialki_w_strefach &&
                         miary.dzialki_w_strefach[wariantAktywny]) || {};
   for (const strefa of STREFY_NAZWY) {
@@ -741,7 +744,7 @@ function odswiezLiczby() {
     const liczby = {
       adresy: grupaAdresow ? grupaAdresow.getLayers().length : 0,
       budynki: liczbaBudynkow(strefa),
-      dzialki: dzialkiStref[strefa] || 0,
+      dzialki: zWarstwy ? dzialkiWStrefie(strefa) : (dzialkiStref[strefa] || 0),
     };
     for (const warstwa of ["adresy", "budynki", "dzialki"]) {
       wiersz.querySelector('[data-liczba="' + warstwa + '"]').textContent =
@@ -816,8 +819,16 @@ const NAZWY_WARSTW_TERENU = {
 function stylObiektu(obiekt) {
   const p = obiekt.properties;
   if (p.warstwa === "dzialki") {
-    return { pane: "pane-dzialki", color: "#5f5f5a", weight: 0.7, opacity: 0.8,
-             fill: true, fillColor: "#7a7a75", fillOpacity: 0.06 };
+    // Barwa strefy, ta sama co przy adresach i budynkach — inaczej po
+    // wlaczeniu stref 20-200 m nie dalo by sie odroznic dzialki zabranej
+    // od tej, kolo ktorej droga tylko przechodzi.
+    const kod = kodStrefyZNazwy(p.strefa);
+    const barwa = BARWY_HEX[kod] || "#7a7a75";
+    const zabrana = kod > 0 && kod <= PRZY_DRODZE;
+    return { pane: "pane-dzialki", color: zabrana ? barwa : "#5f5f5a",
+             weight: zabrana ? 1 : 0.7, opacity: 0.85,
+             fill: true, fillColor: barwa,
+             fillOpacity: zabrana ? 0.22 : 0.08 };
   }
   if (BARWY_TERENU[p.warstwa]) {
     return { pane: "pane-" + p.warstwa, color: BARWY_TERENU[p.warstwa], weight: 1,
@@ -838,16 +849,6 @@ function stylObiektu(obiekt) {
     return { pane: pane, color: tunel ? BARWY_HEX[2] : BARWY_HEX[1], weight: 2.5,
              opacity: 0.95, fillColor: tunel ? BARWY_HEX[2] : BARWY_HEX[1],
              fillOpacity: 0.35 };
-  }
-  if (p.warstwa === "dzialki") {
-    const opis = [p.nr ? "dz. " + p.nr : "", p.obreb ? "obręb " + p.obreb : ""]
-      .filter(Boolean).join(", ");
-    const udzial = Number(p.ud) || 0;
-    return "<strong>" + (opis || "Działka ewidencyjna") + "</strong><br>" +
-      (p.zab ? "zabudowana" : "niezabudowana") + ", zajęta w " +
-      (udzial < 1 ? "mniej niż 1" : udzial) + "%" +
-      '<br><span class="uwaga">przez drogę wariantu ' + wariantAktywny +
-      " — ślad, pas nad tunelem albo łącznicę węzła</span>";
   }
   if (BARWY_TERENU[p.warstwa]) {
     const grupa = NAZWY_WARSTW_TERENU[p.warstwa] || p.warstwa;
@@ -875,6 +876,31 @@ function opisObiektu(p) {
     return "<strong>" + (p.rodzaj === "tunel" ? "Pas nad tunelem" : "Ślad drogi") +
            "</strong><br>wariant " + wariantAktywny;
   }
+  if (p.warstwa === "dzialki") {
+    const tytul = [p.nr ? "dz. " + p.nr : "", p.obreb ? "obręb " + p.obreb : ""]
+      .filter(Boolean).join(", ") || "Działka ewidencyjna";
+    const udzial = Number(p.ud) || 0;
+    const odleglosc = Number(p.odl) || 0;
+    // Zajeta czy tylko sasiadujaca — to dwie rozne odpowiedzi i nie wolno ich
+    // mieszac: przy zajetej liczy sie udzial, przy pozostalych odleglosc.
+    // Dzialka moze lezec 4 cm od krawedzi i nie byc zajeta — "0 m od drogi"
+    // brzmialoby wtedy jak pomylka, wiec mowimy o przyleganiu.
+    const los = udzial > 0
+      ? "zajęta w " + (udzial < 1 ? "mniej niż 1" : udzial.toLocaleString("pl-PL")) + "%"
+      : (odleglosc < 1 ? "przylega do drogi, poza zajęciem"
+         : "poza zajęciem, " + Math.round(odleglosc) + " m od drogi");
+    const wiersze = ["<strong>" + tytul + "</strong>"];
+    if (p.gmina) wiersze.push("gmina " + p.gmina);
+    if (p.pow) wiersze.push(p.pow.toLocaleString("pl-PL") + " m², " +
+                            (p.zab ? "zabudowana" : "niezabudowana"));
+    wiersze.push("<strong>" + los + "</strong>");
+    if (p.strefa) wiersze.push("strefa: " + p.strefa);
+    if (p.teryt) wiersze.push('<span class="uwaga">' + p.teryt + "</span>");
+    wiersze.push('<span class="uwaga">wariant ' + wariantAktywny +
+                 " — ślad, pas nad tunelem albo łącznica węzła</span>");
+    return wiersze.join("<br>");
+  }
+
   if (p.warstwa === "budynki") {
     const wiersze = ["<strong>Budynek " + opisRodzaju(p.RODZAJ) + "</strong>"];
     const kond = [];
@@ -1211,7 +1237,7 @@ STREFY_NAZWY.forEach((strefa, i) => {
     '<td class="liczba" data-liczba="budynki">–</td>' +
     '<td class="liczba" data-liczba="dzialki">–</td>';
   wiersz.querySelector("input").addEventListener("change", () => {
-    odswiezStrefy(); odswiezLiczby(); odswiezEtykietyBudynkow();
+    odswiezStrefy(); odswiezDzialki(); odswiezEtykietyBudynkow();
     zdarzenieZbiorcze("filtr-strefy", "Zawężenie strefami");
   });
   pojemnikStref.appendChild(wiersz);
@@ -1222,7 +1248,7 @@ function ustawStrefy(wlaczone) {
     pole.checked = wlaczone === "wszystkie" ? true : i < PRZY_DRODZE;
   });
   odswiezStrefy();
-  odswiezLiczby();
+  odswiezDzialki();
   odswiezEtykietyBudynkow();
   zdarzenieZbiorcze("filtr-strefy", "Zawężenie strefami");
 }
@@ -1270,8 +1296,9 @@ function kluczDzialki(p) {
 }
 
 function dzialkaWidoczna(klucz) {
-  const [zab, prog] = klucz.split("|");
-  return zabudowaWybrana.has(zab) && zajecieWybrane.has(prog);
+  const [strefa, zab, prog] = klucz.split("|");
+  return strefaWlaczona(strefa) && zabudowaWybrana.has(zab) &&
+         zajecieWybrane.has(prog);
 }
 
 // Liczba dzialek w jednej wartosci wymiaru, przy uwzglednieniu drugiego —
@@ -1279,17 +1306,34 @@ function dzialkaWidoczna(klucz) {
 function policzDzialki(wymiar, wartosc) {
   let suma = 0;
   for (const [klucz, ile] of Object.entries(licznikDzialek)) {
-    const [zab, prog] = klucz.split("|");
+    const [strefa, zab, prog] = klucz.split("|");
+    if (!strefaWlaczona(strefa)) continue;
     if (wymiar === "zabudowa" && zab === wartosc && zajecieWybrane.has(prog)) suma += ile;
     if (wymiar === "zajecie" && prog === wartosc && zabudowaWybrana.has(zab)) suma += ile;
   }
   return suma;
 }
 
+// Ile dzialek widac w danej strefie przy biezacych filtrach — do tabeli stref.
+function dzialkiWStrefie(strefa) {
+  let suma = 0;
+  for (const [klucz, ile] of Object.entries(licznikDzialek)) {
+    const [s, zab, prog] = klucz.split("|");
+    if (s === strefa && zabudowaWybrana.has(zab) && zajecieWybrane.has(prog)) {
+      suma += ile;
+    }
+  }
+  return suma;
+}
+
 function odswiezDzialki() {
   for (const [klucz, grupa] of Object.entries(grupyDzialek)) {
-    if (dzialkaWidoczna(klucz)) podgrupy.dzialki[BEZ_STREFY].addLayer(grupa);
-    else podgrupy.dzialki[BEZ_STREFY].removeLayer(grupa);
+    const podgrupa = podgrupy.dzialki[klucz.split("|")[0]];
+    // Strefa wlacza sie osobnym przelacznikiem, ktory zdejmuje cala podgrupe —
+    // tu decyduja tylko zabudowa i udzial zajecia.
+    const [, zab, prog] = klucz.split("|");
+    if (zabudowaWybrana.has(zab) && zajecieWybrane.has(prog)) podgrupa.addLayer(grupa);
+    else podgrupa.removeLayer(grupa);
   }
   const widoczne = Object.entries(licznikDzialek).reduce(
     (a, [klucz, ile]) => a + (dzialkaWidoczna(klucz) ? ile : 0), 0);
@@ -1306,6 +1350,7 @@ function odswiezDzialki() {
   document.getElementById("licznik-dzialek").textContent =
     " — " + widoczne.toLocaleString("pl-PL");
   zbudujWyborDzialek();
+  odswiezLiczby();
 }
 
 // Nazwa z przedrostkiem, bo zbudujListe() nalezy juz do filtrow budynkow —
@@ -1349,10 +1394,11 @@ async function wczytajDzialki(wariant) {
       style: stylObiektu,
       onEachFeature: (obiekt, warstwa) => {
         warstwa.bindPopup(opisObiektu(obiekt.properties));
-        const klucz = kluczDzialki(obiekt.properties);
+        const strefa = strefaObiektu(obiekt.properties);
+        const klucz = strefa + "|" + kluczDzialki(obiekt.properties);
         if (!grupyDzialek[klucz]) {
           grupyDzialek[klucz] =
-            L.layerGroup().addTo(podgrupy.dzialki[BEZ_STREFY]);
+            L.layerGroup().addTo(podgrupy.dzialki[strefa]);
         }
         grupyDzialek[klucz].addLayer(warstwa);
         licznikDzialek[klucz] = (licznikDzialek[klucz] || 0) + 1;
