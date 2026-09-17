@@ -39,6 +39,16 @@ SZEROKOSC_ODKRYWKI = 30
 # szerokosci dla r = 20/25/30), wiec 25 m to srodek stabilnego zakresu.
 PROMIEN_DOMKNIECIA = 25
 
+# Lacznice wezlow. Material zrodlowy rysuje je sama kreska (warstwa
+# D-Plan-SchematyWezlow) — bez pary linii pobocza i bez skarp, ktore ma trasa
+# glowna, wiec domkniecie morfologiczne nie ma tam czego domknac i przy wezle
+# ze sladu zostaja tylko poligony estakad. Zeby dalo sie je w ogole zmierzyc,
+# przyjmujemy szerokosc: 8 m od kreski w kazda strone, tyle co jednopasowa
+# lacznica z poboczami. To ZALOZENIE, a nie pomiar — i dlatego lacznice nie
+# wchodza do sladu drogi, tylko licza sie w osobnych kolumnach.
+WARSTWA_LACZNIC = "uklad_wezlow"
+SZEROKOSC_LACZNICY = 8
+
 # Przetwarzanie kafelkami — buforowanie calej sieci linii naraz zjada
 # kilkanascie GB i konczy sie ubiciem sesji przez systemd-oomd.
 BOK_KAFELKA = 1000    # [m]

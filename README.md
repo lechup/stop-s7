@@ -35,6 +35,49 @@ zajęty pod budowę, średnio 46–49 m szerokości. Warstwy opisujące drogę t
 (krawędzie jezdni, skarpy), nie poligony, więc ślad składany jest z nich przez
 domknięcie morfologiczne. Szczegóły i kalibracja: [warstwy.md](warstwy.md).
 
+### Węzły i łącznice
+
+Ślad drogi budują warstwy opisujące **trasę główną** — pobocze, skarpy,
+estakady. Łącznice węzłów (ślimaki, pętle) narysowano w materiałach osobno
+i **samą kreską**, bez poboczy i skarp, więc domknięcie morfologiczne nie ma
+tam czego domknąć: przy węźle ze śladu zostają tylko poligony estakad.
+
+Nie da się z rysunku odczytać, jak szerokie są łącznice, więc szerokość
+**przyjmujemy**: 8 m od kreski w każdą stronę, tyle co jednopasowa łącznica
+z poboczami. To jedyne założenie w całym wyliczeniu i dlatego łącznice **nie
+wchodzą do kolumny `w śladzie`** — mają własne:
+
+| kolumna | co znaczy |
+|---|---|
+| `łącznice [ha]` | teren łącznic leżący **poza** śladem drogi |
+| `adresy w łącznicach` | punkty adresowe PRG w tym pasie |
+| `budynki w łącznicach` | obrysy EGiB w tym pasie |
+| `działki w łącznicach` | działki ewidencyjne, których ten pas dotyka |
+
+Rząd wielkości:
+
+| wariant | ślad [ha] | łącznice [ha] | adresy | budynki | działki |
+|---|---|---|---|---|---|
+| A | 150,7 | 15,6 | 11 | 17 | 326 |
+| B | 154,8 | 9,9 | 16 | 36 | 181 |
+| C | 148,4 | 9,2 | 7 | 13 | 185 |
+| D | 137,6 | **23,7** | 11 | 40 | **530** |
+| E | 132,9 | 12,8 | 5 | 20 | 184 |
+| F | 179,8 | 19,3 | 24 | 66 | 424 |
+
+Najciekawszy jest wariant D: ma **najmniejszy ślad** ze wszystkich (137,6 ha),
+ale też **największy dodatek z łącznic** (23,7 ha, czyli +17%, i 530 działek).
+Jego przewaga w tabeli głównej bierze się częściowo stąd, że jego węzły są
+rozbudowane, a węzły nie liczą się do śladu. To samo w drugą stronę dotyczy F,
+który wypada najgorzej i po doliczeniu łącznic wypada jeszcze gorzej.
+
+Liczba jest wrażliwa na przyjętą szerokość — dla wariantu A przy ±5 m wyszłoby
+10,3 ha, przy ±8 m 15,6 ha, przy ±12 m 22,5 ha — więc trzeba ją czytać jako
+oszacowanie, a nie pomiar. Na mapie łącznice mają własny
+przełącznik i **przerywany obrys**, żeby odróżniały się od śladu wyliczonego
+wprost z narysowanych linii. Szczegóły i dowód, że to geometria w terenie,
+a nie rysunek poglądowy: [warstwy.md](warstwy.md).
+
 ### Tunele
 
 Odcinki tunelowe leżą w osobnej warstwie (`otrasyS7wtunelu_*`, `otrasyBDIwtunelu_*`)

@@ -115,6 +115,7 @@ RODZAJ_ZDROWIE = "z"
 WARSTWA_KORYTARZ = "korytarz"
 WARSTWA_BUDYNKI = "budynki"
 WARSTWA_ADRESY = "adresy"
+WARSTWA_LACZNIC = "lacznice"
 
 _budynki_cache = None
 _budynki_sprawdzone = False
@@ -264,7 +265,9 @@ def policz(wariant, postep=None):
     powierzchnia = shapely.difference(slad_pelny, pas)
     korytarz = shapely.union_all([slad_pelny, pas])
 
-  warstwy = {"powierzchnia": powierzchnia, "tunel": pas, "korytarz": korytarz}
+  warstwy = {"powierzchnia": powierzchnia, "tunel": pas,
+             "korytarz": korytarz,
+             "lacznice": geometria.lacznice(wariant, nazwy)}
 
   adresy = wczytaj_adresy(korytarz)
   if adresy.empty:
@@ -418,6 +421,37 @@ def zajete_dzialki(wariant, korytarz):
     zabudowane = set(pary[0].tolist())
   trafione["zabudowana"] = [i in zabudowane for i in range(len(trafione))]
   return trafione
+
+
+def miary_lacznic(wariant, korytarz, pas):
+  """Ile terenu dokladaja lacznice wezlow poza sladem drogi.
+
+  Kolumny sa osobne, a nie doliczone do sladu, bo szerokosc lacznic jest
+  zalozona (consts.SZEROKOSC_LACZNICY), podczas gdy caly slad wynika wprost
+  z narysowanych linii. Bez tej miary zajecie terenu przy wezlach wychodzi
+  zanizone — w materialach lacznice sa tylko kreska, wiec do sladu nie wnosza
+  nic poza poligonami estakad."""
+  if pas is None or shapely.is_empty(pas):
+    return {}
+  nowe = shapely.difference(pas, korytarz)
+  wynik = {"łącznice [ha]": round(shapely.area(nowe) / 10000, 1)}
+  if shapely.is_empty(nowe):
+    return wynik
+
+  adresy = wczytaj_adresy(nowe)
+  if len(adresy):
+    wynik["adresy w łącznicach"] = len(set(
+        adresy.sindex.query(nowe, predicate="intersects").tolist()))
+
+  budynki = wczytaj_budynki()
+  if budynki is not None and len(budynki):
+    wynik["budynki w łącznicach"] = len(set(
+        budynki.sindex.query(nowe, predicate="intersects").tolist()))
+
+  trafione = zajete_dzialki(wariant, nowe)
+  if trafione is not None:
+    wynik["działki w łącznicach"] = len(trafione)
+  return wynik
 
 
 def miary_terenu(wariant, korytarz):
@@ -670,6 +704,11 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
       gpd.GeoDataFrame({"rodzaj": rodzaje}, geometry=geom,
                        crs=consts.CRS_METRYCZNY).to_file(
           sciezka_gpkg, driver="GPKG", layer=WARSTWA_KORYTARZ)
+      pas = warstwy.get("lacznice")
+      if pas is not None and not shapely.is_empty(pas):
+        gpd.GeoDataFrame({"rodzaj": ["lacznice"]}, geometry=[pas],
+                         crs=consts.CRS_METRYCZNY).to_file(
+            sciezka_gpkg, driver="GPKG", layer=WARSTWA_LACZNIC, mode="a")
       if budynki is not None and len(budynki):
         budynki.to_file(sciezka_gpkg, driver="GPKG",
                         layer=WARSTWA_BUDYNKI, mode="a")
@@ -678,6 +717,8 @@ def generate(warianty=None, zapisz_slad=True, postep=print):
                        layer=WARSTWA_ADRESY, mode="a")
 
     teren = miary_terenu(wariant, warstwy["korytarz"])
+    teren.update(miary_lacznic(wariant, warstwy["korytarz"],
+                               warstwy.get("lacznice")))
     wiersz = podsumuj(wariant, adresy, budynki, teren)
     podsumowania.append(wiersz)
     postep("  do rozbiorki {} ({} w sladzie + {} nad tunelem), ≤200 m {}".format(

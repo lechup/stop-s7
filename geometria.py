@@ -140,6 +140,21 @@ def slad_drogi(wariant, postep=None):
   return slad
 
 
+def lacznice(wariant, nazwy=None):
+  """Pas lacznic wezlow (None, gdy wariant ich nie ma).
+
+  Celowo NIE wchodzi do sladu drogi: szerokosc jest zalozona (patrz
+  consts.SZEROKOSC_LACZNICY), a cala reszta wyliczenia opiera sie wylacznie
+  na tym, co narysowano w materialach. Liczymy to osobno, zeby bylo widac,
+  o ile slad zaniza zajecie terenu przy wezlach."""
+  nazwy = nazwy if nazwy is not None else nazwy_warstw(wariant)
+  linie = wczytaj(wariant, consts.WARSTWA_LACZNIC, nazwy)
+  if linie is None or not len(linie):
+    return None
+  return shapely.buffer(shapely.union_all(linie.values),
+                        consts.SZEROKOSC_LACZNICY)
+
+
 def pas_tunelu(wariant, nazwy=None):
   """Pas wykopu nad odcinkami tunelowymi (None, gdy wariant nie ma tuneli).
 

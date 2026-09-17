@@ -97,6 +97,7 @@ KONTEKST = {
 MIARY_DO_PANELU = [
     ("działki", "działki", None),
     ("zajęte [ha]", "zajęta powierzchnia", "ha"),
+    ("łącznice [ha]", "łącznice węzłów poza śladem", "ha"),
     ("osuwiska [ha]", "osuwiska", "ha"),
     ("osuwisko aktywne ciągle [ha]", "— aktywne ciągle", "ha"),
     ("osuwisko aktywne okresowo [ha]", "— aktywne okresowo", "ha"),
@@ -112,6 +113,7 @@ MIARA_WARSTWY = {
     "powodz": "tereny zalewowe [ha]",
     "chronione": "obszary chronione [ha]",
     "dzialki": "działki",
+    "lacznice": "łącznice [ha]",
 }
 
 
@@ -313,10 +315,10 @@ def indeks_dzialek(korytarze, postep=print):
 
 
 def warstwy_wariantu(wariant):
-  """Trzy warstwy jednego wariantu w jednym GeoJSON-ie, z polem 'warstwa'."""
+  """Warstwy jednego wariantu w jednym GeoJSON-ie, z polem 'warstwa'."""
   sciezka = "raporty/wariant-{}-slad.gpkg".format(wariant)
   obiekty = []
-  for warstwa in ("korytarz", "budynki", "adresy"):
+  for warstwa in ("korytarz", "lacznice", "budynki", "adresy"):
     try:
       gdf = gpd.read_file(sciezka, layer=warstwa)
     except Exception:

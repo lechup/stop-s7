@@ -180,6 +180,11 @@
     <div class="sekcja">
       <h2>Warstwy</h2>
       <label class="przelacznik"><input type="checkbox" data-warstwa="korytarz" checked> ślad drogi</label>
+      <label class="przelacznik"><input type="checkbox" data-warstwa="lacznice" checked> łącznice węzłów</label>
+      <p class="uwaga">Materiały STEŚ rysują łącznice samą kreską, bez poboczy
+      i skarp, które ma trasa główna — dlatego przy węzłach ze śladu zostają
+      tylko estakady. Pas łącznic to przyjęte 8 m od kreski w każdą stronę,
+      czyli szacunek, a nie pomiar; do „w śladzie” się nie liczy.</p>
       <label class="przelacznik"><input type="checkbox" data-warstwa="budynki" checked> budynki (EGiB)</label>
       <details class="rodzaje">
         <summary id="podsumowanie-rodzajow">rodzaj: wszystkie</summary>
@@ -418,14 +423,15 @@ function widocznyKlucz(klucz) {
 const WARSTWY_TERENU = ["osuwiska", "ruchy_masowe", "powodz", "chronione"];
 const KOLEJNOSC = {
   chronione: 391, powodz: 392, ruchy_masowe: 393, osuwiska: 394,
-  dzialki: 400, korytarz: 410, budynki: 450, adresy: 490,
+  dzialki: 400, lacznice: 405, korytarz: 410, budynki: 450, adresy: 490,
 };
 for (const [nazwa, zindex] of Object.entries(KOLEJNOSC)) {
   mapa.createPane("pane-" + nazwa).style.zIndex = zindex;
 }
 const DOMYSLNIE_WYLACZONE = new Set(["dzialki", ...WARSTWY_TERENU]);
 
-for (const nazwa of [...WARSTWY_TERENU, "dzialki", "korytarz", "budynki", "adresy"]) {
+for (const nazwa of [...WARSTWY_TERENU, "dzialki", "lacznice", "korytarz",
+                     "budynki", "adresy"]) {
   warstwyMapy[nazwa] = L.layerGroup();
   if (!DOMYSLNIE_WYLACZONE.has(nazwa)) warstwyMapy[nazwa].addTo(mapa);
   podgrupy[nazwa] = {};
@@ -733,6 +739,13 @@ function stylObiektu(obiekt) {
     return { pane: "pane-" + p.warstwa, color: BARWY_TERENU[p.warstwa], weight: 1,
              fillColor: BARWY_TERENU[p.warstwa], fillOpacity: 0.18 };
   }
+  if (p.warstwa === "lacznice") {
+    // Kreska przerywana, bo szerokosc jest zalozona — ma sie roznic od sladu,
+    // ktory wynika wprost z narysowanych linii.
+    return { pane: "pane-lacznice", color: BARWY_HEX[1], weight: 1.5,
+             opacity: 0.9, dashArray: "5 4", fillColor: BARWY_HEX[1],
+             fillOpacity: 0.15 };
+  }
   const pane = "pane-" + p.warstwa;
   if (p.warstwa === "korytarz") {
     const tunel = p.rodzaj === "tunel";
@@ -767,6 +780,11 @@ function stylObiektu(obiekt) {
 }
 
 function opisObiektu(p) {
+  if (p.warstwa === "lacznice") {
+    return "<strong>Łącznice węzła</strong><br>wariant " + wariantAktywny +
+      '<br><span class="uwaga">przebieg z materiałów STEŚ, szerokość przyjęta' +
+      " 8 m od osi — nie wlicza się do śladu drogi</span>";
+  }
   if (p.warstwa === "korytarz") {
     return "<strong>" + (p.rodzaj === "tunel" ? "Pas nad tunelem" : "Ślad drogi") +
            "</strong><br>wariant " + wariantAktywny;
