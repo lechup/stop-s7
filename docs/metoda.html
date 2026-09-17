@@ -101,7 +101,7 @@
   <strong>Na skróty</strong>
   <ol>
     <li><a href="#slad">Skąd bierze się ślad drogi</a></li>
-    <li><a href="#miary">Adresy i budynki — dwie różne miary</a></li>
+    <li><a href="#miary">Adresy, budynki i działki — trzy różne miary</a></li>
     <li><a href="#mieszkania">Czego nie wiemy: liczba mieszkań</a></li>
     <li><a href="#kontrole">Kontrola wyników</a></li>
     <li><a href="#zrodla">Źródła danych i licencja</a></li>
@@ -171,7 +171,7 @@ nie rozstrzygają, która technologia gdzie zostanie użyta, więc te obiekty tr
 do <strong>osobnej kategorii „nad tunelem”</strong> — żeby dało się je doliczyć
 albo odliczyć świadomie. Pas wykopu przyjęto jako ±30 m od osi.</p>
 
-<h2 id="miary">2. Adresy i budynki — dwie różne miary<a class="kotwica" href="#miary">#</a></h2>
+<h2 id="miary">2. Adresy, budynki i działki — trzy różne miary<a class="kotwica" href="#miary">#</a></h2>
 
 <p>Mapa podaje obok siebie liczby liczone z <strong>punktów adresowych PRG</strong>
 i z <strong>obrysów budynków EGiB</strong>. To nie jest ta sama wielkość policzona
@@ -198,6 +198,33 @@ te dwa przypadki jako osobne kategorie, zamiast wrzucać je do jednego worka.</p
 jakiegoś obrysu z EGiB (w samym śladzie 70%). Pozostałe to punkty postawione obok
 budynku, działki z adresem bez zabudowy albo braki w ewidencji — raport tego nie
 rozstrzyga.</p>
+
+<h3>Działki — trzecia miara, o innym właścicielu</h3>
+
+<p>Adresy i budynki mówią o mieszkańcach. <strong>Działka ewidencyjna</strong>
+mówi o właścicielu gruntu, a to często ktoś inny: wywłaszczenie połowy pola
+dotyka rolnika tak samo realnie jak rozbiórka domu, tyle że nie zostawia śladu
+w żadnej statystyce budynków. Spośród działek, które droga przecina,
+<strong>niezabudowanych jest około 80%</strong> — w wariancie A 1422 z 1748.
+Ci ludzie nie pojawiliby się nigdzie indziej w tym raporcie.</p>
+
+<p>Działka nie ma jednej odległości, tylko kształt, więc strefę liczymy od jej
+najbliższego punktu — dzięki temu wchodzi w tę samą siatkę co adresy i budynki
+(w śladzie, nad tunelem, w łącznicach, dalej 20/30/50/200 m). Zajęcie liczone
+jest od całej drogi: śladu, pasa nad tunelem i łącznic węzłów.</p>
+
+<p>Sama liczba działek nie mówi jednak, jak dotkliwe jest zajęcie — skraj
+działki to co innego niż działka zabrana w całości. Dlatego podajemy też
+<strong>udział zajęcia</strong>: ile działek traci ponad 50%, ile ponad 90%
+powierzchni. W wariancie A ponad połowę traci 591 działek, a niemal całość —
+239. Między tymi progami leży przypadek najbardziej kłopotliwy dla właściciela:
+resztówka, czyli kawałek zbyt mały albo źle ukształtowany, żeby dało się go
+dalej używać.</p>
+
+<p>Pełna lista z identyfikatorem TERYT i procentem zajęcia, pogrupowana po
+obrębach, jest w pliku <code>dzialki.md</code> w wydaniu danych. Na mapie działkę
+można znaleźć wyszukiwarką — po identyfikatorze, po obrębie z numerem albo po
+samym numerze — i zobaczyć, co robi z nią każdy z sześciu wariantów.</p>
 
 <h2 id="mieszkania">3. Czego nie wiemy: liczba mieszkań<a class="kotwica" href="#mieszkania">#</a></h2>
 

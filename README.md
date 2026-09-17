@@ -78,26 +78,34 @@ niej kolumny powierzchniowe:
 Odległości 20/30/50/200 m liczą się także od łącznic — patrz sekcja o strefach
 wyżej.
 
-Rząd wielkości:
+Rząd wielkości — kolumna `łącznice [ha]` to teren węzłów leżący **poza** śladem
+drogi, reszta to obiekty, które tyka wyłącznie węzeł:
 
-| wariant | ślad [ha] | łącznice [ha] | adresy | budynki | działki |
+| wariant | zajęte [ha] | łącznice [ha] | adresy | budynki | działki |
 |---|---|---|---|---|---|
-| A | 150,7 | 15,6 | 11 | 17 | 326 |
-| B | 154,8 | 9,9 | 16 | 36 | 181 |
-| C | 148,4 | 9,2 | 7 | 13 | 185 |
-| D | 137,6 | **23,7** | 11 | 40 | **530** |
-| E | 132,9 | 12,8 | 5 | 20 | 184 |
-| F | 179,8 | 19,3 | 24 | 66 | 424 |
+| A | 163,5 | 15,6 | 11 | 10 | 214 |
+| B | 164,7 | 9,9 | 16 | 32 | 113 |
+| C | 157,6 | 9,2 | 7 | 11 | 144 |
+| D | 159,0 | **23,7** | 11 | 33 | **367** |
+| E | 145,8 | 12,8 | 5 | 16 | 113 |
+| F | 201,2 | 19,3 | 24 | 54 | 215 |
 
-Najciekawszy jest wariant D: ma **najmniejszy ślad** ze wszystkich (137,6 ha),
-ale też **największy dodatek z łącznic** (23,7 ha, czyli +17%, i 530 działek).
-Jego przewaga w tabeli głównej bierze się częściowo stąd, że jego węzły są
-rozbudowane, a węzły nie liczą się do śladu. To samo w drugą stronę dotyczy F,
-który wypada najgorzej i po doliczeniu łącznic wypada jeszcze gorzej.
+Najciekawszy jest wariant D: ma **najmniejszy ślad drogi** ze wszystkich, ale
+**najbardziej rozbudowane węzły**. Dopóki liczyło się sam ślad, wyprzedzał
+wariant C o 240 działek; po doliczeniu łącznic przewaga topnieje do **17**.
+To samo w drugą stronę dotyczy F, który wypadał najgorzej i po doliczeniu
+węzłów wypada jeszcze gorzej — 54 budynki stoją tam w samych łącznicach.
 
-Liczba jest wrażliwa na przyjętą szerokość — dla wariantu A przy ±5 m wyszłoby
-10,3 ha, przy ±8 m 15,6 ha, przy ±12 m 22,5 ha — więc trzeba ją czytać jako
-oszacowanie, a nie pomiar. Na mapie łącznice mają własny
+Łącznice wchodzą do **wszystkich** miar na równi ze śladem: do `do rozbiórki`,
+do liczby i powierzchni zajętych działek, a także do hektarów osuwisk, terenów
+zalewowych i obszarów chronionych — łącznica nad osuwiskiem to ten sam problem
+inżynieryjny, co jezdnia nad osuwiskiem.
+
+Wynik jest wrażliwy na przyjętą szerokość — dla wariantu A przy ±5 m wyszłoby
+10,3 ha, przy ±8 m 15,6 ha, przy ±12 m 22,5 ha — więc trzeba go czytać jako
+oszacowanie, a nie pomiar. Kolumna `łącznice [ha]` istnieje właśnie po to, żeby
+dało się oszacować, ile wyniku na tym założeniu stoi, i w razie potrzeby je
+odjąć. Na mapie łącznice mają własny
 przełącznik i **przerywany obrys**, żeby odróżniały się od śladu wyliczonego
 wprost z narysowanych linii. Szczegóły i dowód, że to geometria w terenie,
 a nie rysunek poglądowy: [warstwy.md](warstwy.md).
