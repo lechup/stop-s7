@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Umieść mapę u siebie — S7, warianty a domy i działki</title>
+<meta name="description" content="Generator kodu do osadzenia mapy wariantów S7 na własnej stronie — wybór wariantu, motywu i widoku.">
+<style>
+  /* Motyw jasny jest podstawa; ciemny nadpisuje tylko to, co musi.
+     Kolejnosc regul ma znaczenie: preferencja systemowa dziala, dopoki
+     uzytkownik nie wybierze czegos jawnie, a wtedy wygrywa data-motyw. */
+  :root {
+    color-scheme: light;
+    --tlo: #f7f7f5; --panel: #fff; --tekst: #1a1a1a; --przygasly: #5f6368;
+    --ramka: #d8d8d4; --akcent: #1a5fb4; --pole: #fff;
+    --uwaga: #fdf3e3; --uwaga-ramka: #e8c48a;
+    --podpis-tlo: rgba(255,255,255,.82);
+    --filtr-kafelkow: none;
+    --dzialki: #7a7a75; --osuwisko: #a51d2d; --powodz: #1c71d8; --chronione: #26a269;
+    --slad: #c01c28; --tunel: #e66100; --s20: #f5c211; --s30: #99c1f1;
+    --s50: #62a0ea; --s200: #b5cee4;
+  }
+
+  :root:not([data-motyw="jasny"]) { }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-motyw="jasny"]) {
+      color-scheme: dark;
+      --tlo: #16161a; --panel: #1d1d22; --tekst: #e7e7e4; --przygasly: #9a9aa3;
+      --ramka: #34343c; --akcent: #78aeea; --pole: #24242b;
+      --uwaga: #2e2617; --uwaga-ramka: #6b552c;
+      --podpis-tlo: rgba(24,24,28,.86);
+      /* Kafelki OSM sa jasne — odwracamy je filtrem zamiast dokladac drugiego
+         dostawcy kafelkow i kolejnej polityki uzytkowania. */
+      --filtr-kafelkow: invert(1) hue-rotate(180deg) brightness(.92) contrast(.92);
+    }
+  }
+  :root[data-motyw="ciemny"] {
+    color-scheme: dark;
+    --tlo: #16161a; --panel: #1d1d22; --tekst: #e7e7e4; --przygasly: #9a9aa3;
+    --ramka: #34343c; --akcent: #78aeea; --pole: #24242b;
+      --uwaga: #2e2617; --uwaga-ramka: #6b552c;
+    --podpis-tlo: rgba(24,24,28,.86);
+    --filtr-kafelkow: invert(1) hue-rotate(180deg) brightness(.92) contrast(.92);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--tlo); color: var(--tekst);
+         font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .strona { max-width: 760px; margin: 0 auto; padding: 28px 20px 70px; }
+  header { border-bottom: 1px solid var(--ramka); padding-bottom: 18px; margin-bottom: 26px; }
+  h1 { font-size: 26px; margin: 0 0 6px; }
+  h2 { font-size: 19px; margin: 34px 0 10px; scroll-margin-top: 16px; }
+  h3 { font-size: 16px; margin: 22px 0 6px; }
+  p { margin: 0 0 12px; }
+  a { color: var(--akcent); }
+  .prowadzenie { color: var(--przygasly); margin: 0; }
+  .powrot { display: inline-block; margin-bottom: 14px; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 16px; font-size: 14px;
+          background: var(--panel); }
+  th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--ramka);
+           vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .03em;
+       color: var(--przygasly); }
+  td.l { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ramka { background: var(--uwaga); border: 1px solid var(--uwaga-ramka);
+           border-radius: 8px; padding: 12px 14px; margin: 16px 0; font-size: 15px; }
+  .ramka p:last-child { margin-bottom: 0; }
+  .spis { background: var(--panel); border: 1px solid var(--ramka); border-radius: 8px;
+          padding: 12px 16px; margin-bottom: 26px; font-size: 15px; }
+  .spis ol { margin: 6px 0 0; padding-left: 20px; }
+  .spis li { padding: 2px 0; }
+  code { background: var(--pole); padding: 1px 5px; border-radius: 3px; font-size: 13px; }
+  .przypis { font-size: 13px; color: var(--przygasly); }
+  footer { margin-top: 44px; padding-top: 16px; border-top: 1px solid var(--ramka);
+           font-size: 14px; color: var(--przygasly); }
+  /* Generator: formularz po lewej, podglad po prawej, na waskim ekranie
+     jedno pod drugim. */
+  .generator { display: grid; grid-template-columns: 260px 1fr; gap: 20px;
+               align-items: start; margin: 18px 0 8px; }
+  @media (max-width: 720px) { .generator { grid-template-columns: 1fr; } }
+  .pola label { display: block; font-size: 14px; margin: 0 0 12px; }
+  .pola select, .pola input[type=number], .pola input[type=text] {
+    width: 100%; margin-top: 3px; padding: 6px 8px; font: inherit; font-size: 14px;
+    background: var(--pole); color: var(--tekst);
+    border: 1px solid var(--ramka); border-radius: 6px; }
+  .pola .wiersz { display: flex; gap: 10px; }
+  .pola .wiersz label { flex: 1; }
+  .pola .checkbox { display: flex; gap: 8px; align-items: flex-start;
+                    font-size: 14px; margin-bottom: 12px; }
+  .podglad { border: 1px solid var(--ramka); border-radius: 8px; overflow: hidden;
+             background: var(--panel); }
+  .podglad iframe { display: block; width: 100%; border: 0; }
+  textarea { width: 100%; min-height: 96px; padding: 10px 12px; font-size: 13px;
+             font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+             background: var(--pole); color: var(--tekst); line-height: 1.5;
+             border: 1px solid var(--ramka); border-radius: 8px; resize: vertical; }
+  button.dzialanie { font: inherit; font-size: 14px; padding: 7px 14px;
+                     background: var(--akcent); color: #fff; border: 0;
+                     border-radius: 6px; cursor: pointer; }
+  button.dzialanie:hover { filter: brightness(1.08); }
+  .potwierdzenie { font-size: 14px; color: var(--przygasly); margin-left: 10px; }
+  .kotwica { font-size: 13px; color: var(--przygasly); text-decoration: none;
+             margin-left: 6px; opacity: 0; }
+  h2:hover .kotwica { opacity: 1; }
+</style>
+<script>
+  try {
+    var zapisany = localStorage.getItem("motyw");
+    if (zapisany === "jasny" || zapisany === "ciemny") {
+      document.documentElement.setAttribute("data-motyw", zapisany);
+    }
+  } catch (e) { /* prywatne okno — zostaje motyw systemowy */ }
+</script>
+</head>
+<body>
+<div class="strona">
+
+<a class="powrot" href="./">← wróć do mapy</a>
+
+<header>
+  <h1>Umieść mapę u siebie</h1>
+  <p class="prowadzenie">Mapę można wstawić na dowolną stronę — sołectwa,
+  stowarzyszenia, bloga, portalu lokalnego — jednym kawałkiem kodu. Wybierz, co
+  ma pokazywać, przesuń podgląd tam, gdzie chcesz, i skopiuj gotowy fragment.</p>
+</header>
+
+<div class="ramka">
+  <p><strong>Można to robić bez pytania nikogo o zgodę.</strong> Dane pochodzą
+  z materiałów konsultacji społecznych i z rejestrów publicznych, a kod strony
+  jest na licencji <a href="https://github.com/lechup/stop-s7/blob/main/LICENSE">AGPLv3</a>.
+  Prosimy tylko, żeby przy mapie została informacja, skąd pochodzi — robi to za
+  Ciebie pasek nad mapą, z linkiem do pełnej wersji.</p>
+</div>
+
+<h2>Generator</h2>
+
+<div class="generator">
+  <div class="pola">
+    <label>Wariant na starcie
+      <select id="wariant">
+        <option value="A">A</option><option value="B">B</option>
+        <option value="C">C</option><option value="D">D</option>
+        <option value="E">E</option><option value="F">F</option>
+      </select>
+    </label>
+    <label>Motyw
+      <select id="motyw">
+        <option value="auto">auto — za ustawieniem systemu</option>
+        <option value="light">jasny</option>
+        <option value="dark">ciemny</option>
+      </select>
+    </label>
+    <label>Widok
+      <select id="tryb">
+        <option value="1">kompaktowy — sama mapa i wybór wariantu</option>
+        <option value="0">pełny — z panelem i wyszukiwarkami</option>
+      </select>
+    </label>
+    <div class="wiersz">
+      <label>Szerokość
+        <input id="szerokosc" type="text" value="100%">
+      </label>
+      <label>Wysokość [px]
+        <input id="wysokosc" type="number" value="520" min="240" step="20">
+      </label>
+    </div>
+    <div class="checkbox">
+      <input id="zachowaj-widok" type="checkbox" checked>
+      <label for="zachowaj-widok" style="margin:0">Zapamiętaj wycinek mapy
+      pokazany obok (przesuń go i przybliż, jak chcesz)</label>
+    </div>
+  </div>
+
+  <div class="podglad">
+    <iframe id="podglad" title="Podgląd osadzonej mapy" loading="lazy"></iframe>
+  </div>
+</div>
+
+<h2>Kod do wklejenia</h2>
+<p>Wklej to w miejscu, w którym mapa ma się pojawić — w edytorze HTML wpisu,
+w widżecie „własny kod” albo wprost w szablonie strony.</p>
+<textarea id="kod" readonly spellcheck="false"></textarea>
+<p><button class="dzialanie" id="kopiuj" type="button">Skopiuj kod</button>
+<span class="potwierdzenie" id="potwierdzenie"></span></p>
+
+<h2>Co można ustawić w adresie</h2>
+<p>Generator składa zwykły adres strony, więc te same parametry działają
+w każdym linku — także takim wysłanym mailem czy wklejonym na Facebooka.</p>
+
+<table>
+  <tr><th>parametr</th><th>wartości</th><th>co robi</th></tr>
+  <tr><td><code>?theme=</code></td><td><code>auto</code>, <code>light</code>,
+      <code>dark</code></td>
+      <td>motyw strony; domyślnie <code>auto</code>, czyli za ustawieniem
+      systemu odwiedzającego. Podany jawnie wygrywa też z wyborem
+      zapamiętanym wcześniej w przeglądarce.</td></tr>
+  <tr><td><code>?embed=1</code></td><td>—</td>
+      <td>widok kompaktowy: znika panel boczny, zostaje mapa, przełącznik
+      wariantu i link do pełnej wersji.</td></tr>
+  <tr><td><code>#A/14/49.95/19.93</code></td><td>wariant / przybliżenie /
+      szerokość / długość</td>
+      <td>wycinek mapy na starcie. Ten sam zapis dostajesz w pasku adresu,
+      kiedy przesuwasz mapę — wystarczy skopiować.</td></tr>
+  <tr><td><code>#A/17/…/Osterwy|41P|Kraków</code></td><td>ulica|numer|miejscowość</td>
+      <td>link otwierający się na konkretnym adresie z wynikiem wyszukiwania.</td></tr>
+  <tr><td><code>#A/17/…/d:120609_2.0004.206/1</code></td><td><code>d:</code> i TERYT</td>
+      <td>to samo dla działki ewidencyjnej.</td></tr>
+</table>
+
+<h2>O czym warto wiedzieć</h2>
+<p>Mapa w ramce pobiera dane z tej domeny — jeden plik wariantu waży około
+220 kB, a wyszukiwarki i działki doczytują się dopiero, gdy ktoś z nich
+skorzysta. Osadzenie nie ustawia żadnych ciasteczek i nie śledzi
+odwiedzających: statystyka jest zbiorcza i nie zbiera niczego, co pozwalałoby
+kogoś rozpoznać. Wpisana w wyszukiwarkę fraza nigdy nie opuszcza przeglądarki —
+to informacja o tym, gdzie ktoś mieszka, i nie ma powodu, żeby do nas trafiała.</p>
+
+<p>Jeśli Twoja strona ma politykę treści (CSP) ograniczającą ramki, dopuść
+<code>frame-src https://lechup.github.io</code>.</p>
+
+<footer>
+  <p><a href="metoda.html">Jak to policzono i czego nie wiemy</a> ·
+  <a href="https://github.com/lechup/stop-s7">github.com/lechup/stop-s7</a><br>
+  <a href="./">← wróć do mapy</a></p>
+</footer>
+
+</div>
+
+<script>
+const pola = ["wariant", "motyw", "tryb", "szerokosc", "wysokosc"]
+  .reduce((mapa, id) => (mapa[id] = document.getElementById(id), mapa), {});
+const zachowajWidok = document.getElementById("zachowaj-widok");
+const ramka = document.getElementById("podglad");
+const poleKodu = document.getElementById("kod");
+
+// Podglad startuje na calym korytarzu; dalej idzie za tym, co ustawi czlowiek.
+let widok = "#A/11/49.9500/19.9300";
+
+function adresBazowy() {
+  return new URL("index.html", location.href).href;
+}
+
+function adresOsadzenia(zWidokiem) {
+  const pytanie = [];
+  if (pola.tryb.value === "1") pytanie.push("embed=1");
+  if (pola.motyw.value !== "auto") pytanie.push("theme=" + pola.motyw.value);
+  // Bez przypietego wycinka wariant idzie parametrem, a mapa sama dopasowuje
+  // widok do calego korytarza — inaczej kazde osadzenie mialoby na sztywno
+  // wspolrzedne z podgladu, takze wtedy, gdy nikt o to nie prosil.
+  if (!zWidokiem) pytanie.push("wariant=" + pola.wariant.value);
+  const hash = zWidokiem ? "#" + pola.wariant.value + widok.slice(2) : "";
+  return adresBazowy() + (pytanie.length ? "?" + pytanie.join("&") : "") + hash;
+}
+
+function odswiezPodglad() {
+  // Podglad zawsze startuje z biezacego wycinka — inaczej kazda zmiana pola
+  // odrzucalaby mape tam, gdzie byla na poczatku.
+  const nowy = adresOsadzenia(true);
+  // Podmiana src przeladowuje ramke, wiec robimy to tylko przy realnej zmianie.
+  if (ramka.dataset.adres !== nowy) {
+    ramka.dataset.adres = nowy;
+    ramka.src = nowy;
+  }
+  ramka.style.height = (parseInt(pola.wysokosc.value, 10) || 520) + "px";
+}
+
+function odswiezKod() {
+  const szer = (pola.szerokosc.value || "100%").trim();
+  const wys = parseInt(pola.wysokosc.value, 10) || 520;
+  const styl = "width:" + (/^\d+$/.test(szer) ? szer + "px" : szer) +
+               ";height:" + wys + "px;border:0";
+  poleKodu.value =
+    '<iframe src="' + adresOsadzenia(zachowajWidok.checked) + '"\n' +
+    '        style="' + styl + '" loading="lazy"\n' +
+    '        title="S7 — warianty przebiegu a domy i działki"></iframe>';
+}
+
+function odswiez() { odswiezPodglad(); odswiezKod(); }
+
+Object.values(pola).forEach(p => p.addEventListener("input", odswiez));
+zachowajWidok.addEventListener("change", odswiezKod);
+
+// Podglad jest z tej samej domeny, wiec mozemy odczytac jego stan widoku —
+// dzieki temu "przesun mape tam, gdzie chcesz" naprawde dziala, zamiast kazac
+// komus przepisywac wspolrzedne z paska adresu.
+setInterval(() => {
+  try {
+    const h = ramka.contentWindow.location.hash;
+    if (h && h !== widok && /^#[A-F]\//.test(h)) {
+      widok = h;
+      const wariantZPodgladu = h.slice(1, 2);
+      if (wariantZPodgladu !== pola.wariant.value) {
+        pola.wariant.value = wariantZPodgladu;
+        ramka.dataset.adres = adresOsadzenia(true);
+      }
+      odswiezKod();
+    }
+  } catch (e) { /* ramka jeszcze sie wczytuje */ }
+}, 600);
+
+document.getElementById("kopiuj").addEventListener("click", async () => {
+  const potwierdzenie = document.getElementById("potwierdzenie");
+  try {
+    await navigator.clipboard.writeText(poleKodu.value);
+    potwierdzenie.textContent = "skopiowane";
+  } catch (e) {
+    poleKodu.select();
+    potwierdzenie.textContent = "zaznaczone — skopiuj Ctrl+C";
+  }
+  if (window.goatcounter && window.goatcounter.count) {
+    window.goatcounter.count({ path: "kopiowanie-osadzenia",
+                               title: "Skopiowanie kodu osadzenia", event: true });
+  }
+  setTimeout(() => { potwierdzenie.textContent = ""; }, 2500);
+});
+
+odswiez();
+</script>
+
+<script data-goatcounter="https://stop-s7.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>

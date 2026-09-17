@@ -471,7 +471,9 @@ Do mapy dołączona jest strona [metoda.html](docs/metoda.html) —
 „Jak to policzono i czego nie wiemy". Opisuje sposób odtworzenia śladu, obie
 miary, granice danych i kontrole, z kotwicami przy sekcjach (`#kontrole`,
 `#mieszkania`), żeby dało się podlinkować konkretny akapit w sporze o liczby.
-Jest osobnym adresem, więc można ją podesłać bez mapy.
+Jest osobnym adresem, więc można ją podesłać bez mapy. Trzecia podstrona,
+[osadz.html](docs/osadz.html), to generator kodu do wstawienia mapy na cudzą
+stronę — opisany [niżej](#osadzanie-mapy-na-innych-stronach).
 
 Dane generuje [eksport_web.py](eksport_web.py):
 
@@ -526,8 +528,10 @@ Poza odsłonami liczone są zdarzenia:
 | `wyszukiwanie` | zapytanie zwróciło trafienia |
 | `wyszukiwanie-bez-wyniku` | zapytanie nic nie znalazło — dużo takich znaczy, że promień indeksu (500 m) jest za mały albo ludzie pytają spoza obszaru |
 | `sprawdzenie-adresu` | ktoś kliknął wynik, czyli faktycznie sprawdził swój adres |
+| `wyszukiwanie-dzialki`, `wyszukiwanie-dzialki-bez-wyniku`, `sprawdzenie-dzialki` | to samo dla wyszukiwarki działek |
 | `wariant-X` | świadome przełączenie wariantu (wczytanie strony się nie liczy) |
-| `adres-z-linku` | ktoś wszedł z linku niosącego adres — miara tego, czy udostępnianie działa |
+| `adres-z-linku`, `dzialka-z-linku` | ktoś wszedł z linku niosącego adres albo działkę — miara tego, czy udostępnianie działa |
+| `kopiowanie-osadzenia` | ktoś skopiował kod iframe z generatora |
 | `filtr-strefy` | zawężenie strefami |
 | `filtr-rodzaje` | zawężenie rodzajem budynku |
 | `filtr-warstwy` | przełączenie warstwy |
@@ -542,6 +546,36 @@ przeglądarki — to, czego ktoś szuka, jest informacją o tym, gdzie mieszka.
 
 Domyślna ścieżka GoatCountera to `pathname + search`, więc hash ze stanem widoku
 (`#A/17/49.9350/19.9607`) nie rozbija statystyk na tysiące osobnych „stron".
+Wyszukanie działki czy adresu **nie tworzy** osobnej strony w statystykach —
+zmienia tylko hash, a liczy się jako zdarzenie.
+
+Parametry w adresie już by ją rozbijały (`?embed=1&theme=dark` to inny `search`
+niż `?embed=1`), więc osadzenia sprowadzamy do jednej ścieżki `/osadzona-mapa`
+przez `window.goatcounter.path`. Z której strony przyszło osadzenie, widać i tak
+po odsyłaczu.
+
+### Osadzanie mapy na innych stronach
+
+Mapę można wstawić w cudzą stronę `<iframe>`-em, a generator kodu stoi pod
+[`docs/osadz.html`](docs/osadz.html) (na stronie: „umieść mapę u siebie").
+Generator trzyma podgląd w ramce z tej samej domeny i czyta jego hash, więc
+„przesuń mapę tam, gdzie chcesz" działa naprawdę, zamiast kazać komuś
+przepisywać współrzędne.
+
+Parametry adresu, które obsługuje strona:
+
+| parametr | wartości | działanie |
+|---|---|---|
+| `?theme=` | `auto` (domyślnie), `light`, `dark` | motyw; podany jawnie wygrywa z wyborem zapamiętanym w `localStorage`, bo osadzenie ma iść za motywem strony gospodarza, a nie za tym, co ktoś kiedyś wybrał u nas |
+| `?embed=1` | — | widok kompaktowy: bez panelu bocznego, z paskiem wyboru wariantu i linkiem do pełnej wersji |
+| `?wariant=` | `A`–`F` | wariant startowy bez przypinania wycinka mapy (mapa sama dopasowuje widok do korytarza) |
+| `#A/14/49.95/19.93` | wariant/zoom/szerokość/długość | konkretny wycinek; ten sam zapis pojawia się w pasku adresu przy przesuwaniu mapy |
+| `#…/Osterwy\|41P\|Kraków` | ulica\|numer\|miejscowość | link otwierający się na adresie |
+| `#…/d:120609_2.0004.206/1` | `d:` + TERYT | link otwierający się na działce |
+
+Działka w linku to nowość — wcześniej dawał się udostępnić tylko adres, więc
+ktoś, kto znalazł swoją działkę, nie miał czego wysłać sąsiadowi. Przedrostek
+`d:` rozróżnia oba przypadki, bo sam identyfikator TERYT wygląda jak numer.
 
 ## Dane wejściowe
 
@@ -780,4 +814,5 @@ i rocznik danych, bo PRG aktualizowany jest na bieżąco.
 - [pobierz_budynki.py](pobierz_budynki.py) — pobieranie obrysów budynków z EGiB
 - [pobierz_prg.py](pobierz_prg.py) — odświeżanie punktów adresowych PRG
 - [eksport_web.py](eksport_web.py) — dane dla mapy online
-- [docs/](docs/) — strona na GitHub Pages
+- [docs/](docs/) — strona na GitHub Pages: mapa (`index.html`), metoda
+  (`metoda.html`) i generator osadzeń (`osadz.html`)
