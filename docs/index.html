@@ -136,6 +136,12 @@
   html.osadzona #pasek-osadzenia .warianty { margin: 0; }
   html.osadzona #pasek-osadzenia .rozpychacz { flex: 1; }
   html.osadzona #mapa { flex: 1; min-height: 0; }
+  /* W waskiej ramce tytul, wybor wariantu i link nie mieszcza sie w jednym
+     wierszu, a pasek w dwoch liniach zjada 10% wysokosci osadzenia. Tytul
+     ustepuje pierwszy — zrodlo i tak niesie link obok. */
+  @media (max-width: 560px) {
+    html.osadzona #pasek-osadzenia strong { display: none; }
+  }
   @media (max-width: 820px) {
     #uklad { flex-direction: column; }
     #panel { width: auto; max-height: 52vh; border-right: none;
