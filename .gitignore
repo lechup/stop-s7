@@ -15,3 +15,6 @@ raporty/
 
 # Archiwa przygotowane do wgrania na release
 dane-archiwa/
+
+# plik pomocniczy testow w przegladarce (kasowany po przebiegu)
+docs/_harness.html

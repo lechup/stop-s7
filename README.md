@@ -23,6 +23,37 @@ Przykłady:
 LIMIT=8G ./uruchom.sh                  # podnieś limit pamięci
 ```
 
+### Testy
+
+```bash
+.venv/bin/python testy.py                 # statyczne i spójność danych, ~2 s
+.venv/bin/python testy.py --przegladarka  # dodatkowo klika stronę, ~40 s
+```
+
+Trzy grupy, każda odpowiada na inne pytanie:
+
+| grupa | co sprawdza | czego wymaga |
+|---|---|---|
+| statyczne | składnia JS, kolizje nazw funkcji, domknięcie znaczników, czy skrypt sięga po istniejące elementy, czy każda warstwa ma przełącznik | niczego (poza `node` do składni) |
+| dane | czy mapa pokazuje te same liczby co raport: progi zajęcia działek, liczba i zabudowa działek, strefy w `miary.json`, kody stref w indeksie adresów, brak `NaN` w JSON-ach | `docs/dane/` i `raporty/podsumowanie.csv` |
+| przeglądarka | czy filtry faktycznie filtrują: rodzaje budynków, udział zajęcia działek, sumy w tabeli stref | Chrome |
+
+Testy powstały z konkretnych wpadek i każdą z nich łapią — sprawdziłem to,
+psując kod z powrotem:
+
+- funkcja `zbudujListe()` dla działek przykryła starszą o tej samej nazwie
+  i **filtr budynków przestał działać bez jednego błędu w konsoli** → test
+  kolizji nazw,
+- mapa zaokrąglała udział zajęcia do liczby całkowitej, więc działka zajęta
+  w 90,4% wypadała z kategorii „ponad 90%", choć w CSV w niej była → test
+  zgodności progów z raportem,
+- `json.dump` zapisywał `NaN`, którego `JSON.parse` nie przyjmuje, i cała mapa
+  się nie wczytywała → test na `NaN`.
+
+Testy w przeglądarce serwują `docs/` na losowym porcie i sterują stroną z ramki
+w tym samym origin — bez tego przeglądarka nie pozwoliłaby jej dotknąć. Chrome
+działa w trybie headless, więc nic nie miga po ekranie.
+
 ### Szybkie przeliczenie miar
 
 Pełne przeliczenie zajmuje **35–40 minut**, z czego zdecydowaną większość
@@ -858,5 +889,6 @@ i rocznik danych, bo PRG aktualizowany jest na bieżąco.
 - [pobierz_budynki.py](pobierz_budynki.py) — pobieranie obrysów budynków z EGiB
 - [pobierz_prg.py](pobierz_prg.py) — odświeżanie punktów adresowych PRG
 - [eksport_web.py](eksport_web.py) — dane dla mapy online
+- [testy.py](testy.py) — testy strony, danych i ich zgodności z raportem
 - [docs/](docs/) — strona na GitHub Pages: mapa (`index.html`), metoda
   (`metoda.html`) i generator osadzeń (`osadz.html`)
